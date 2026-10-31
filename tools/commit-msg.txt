@@ -1,0 +1,13 @@
+feat: QingLong Workers v0.1 — panel + worker backend
+
+- Panel (public/): vanilla SPA — task list, editor with 时/天/月 slider,
+  script import (==qinglong== task header auto-fill), MeoW notify settings, logs
+- Worker (src/index.js): /api/* with HMAC cookie auth, cron watchdog, /health
+- TaskScheduler DO: hourly alarm heartbeat, single-flight lock, self re-arm
+- Runner: new Function compile, ctx.params/log/notify/fetch, 90s task timeout,
+  per-request fetch fuse, 200-line ring-buffered logs in D1
+- D1: tasks/logs/settings, auto schema migration + builtin seeding on first hit
+- nextrun.js: Beijing-anchored schedules (h/d/m), catch-up once, month clamping
+- Builtin scripts: GLaDOS checkin fully ported from reference/glados_checkin.py;
+  DNSHE renewal skeleton (full port pending)
+- CI: wrangler-action deploy on push to main

@@ -1,0 +1,20 @@
+name: Deploy
+
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 需要在仓库 Secrets 里配置：
+      #   CLOUDFLARE_API_TOKEN  —— 模板 "Edit Cloudflare Workers"，附加 D1 编辑权限
+      #   CLOUDFLARE_ACCOUNT_ID —— 新账号的 Account ID
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

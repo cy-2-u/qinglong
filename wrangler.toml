@@ -1,0 +1,35 @@
+name = "qinglong"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+
+# 面板静态资源（public/ 目录整体作为 Workers Static Assets，先于 Worker 匹配）
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# cron 只当看门狗（每小时确保 DO 闹钟活着）；真调度在 TaskScheduler DO 的 alarm 里
+[triggers]
+crons = ["0 * * * *"]
+
+# 调度锚定用的时区偏移（小时，相对 UTC）
+[vars]
+TZ_OFFSET = "8"
+
+# 面板脚本以纯文本导入（src/scripts/*.txt）
+rules = [
+  { type = "Text", globs = ["**/*.txt"] }
+]
+
+# ⚠ 一次性步骤：wrangler d1 create qinglong 后，把返回的 database_id 填到这里
+[[d1_databases]]
+binding = "DB"
+database_name = "qinglong"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[[durable_objects.bindings]]
+name = "SCHEDULER"
+class_name = "TaskScheduler"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TaskScheduler"]

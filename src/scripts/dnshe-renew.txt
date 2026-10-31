@@ -1,0 +1,22 @@
+// DNSHE 免费域名自动续期（骨架）
+// 完整逻辑待从 reference/dnshe_renew_domains.py 移植（分页、阈值判断、逐个续期、汇总推送）。
+// 当前版本只做参数与连通性占位，运行结果始终为“成功”，不会产生副作用。
+// ==qinglong==
+// name: DNSHE 域名续期
+// unit: m
+// amount: 1
+// day: 1
+// hour: 9
+// params: api_key, api_secret, threshold_days
+// ==/qinglong==
+async function main(ctx) {
+  const P = ctx.params || {};
+  const apiKey = String(P.api_key || '').trim();
+  const apiSecret = String(P.api_secret || '').trim();
+  if (!apiKey || !apiSecret) {
+    ctx.log('缺少参数 api_key / api_secret，请在参数中填写 DNSHE API 密钥');
+    return;
+  }
+  ctx.log('DNSHE 续期脚本为骨架版本，完整移植进行中（参考 reference/dnshe_renew_domains.py）');
+  ctx.log('本次不产生任何续期操作');
+}
