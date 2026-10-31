@@ -1,17 +1,11 @@
-fix: remove leftover pushLevel block (crash) + script audit cleanup
+chore: live-run + cpu-bench tooling (credential-free)
 
-GLaDOS:
-- remove residual fail_only block referencing deleted pushLevel variable
-  (would throw ReferenceError on every run) - caught by adding tests
-- always-push behavior confirmed by tests
-
-DNSHE:
-- rate-limit hints no longer tell user to tune min_interval (now hardcoded)
-- unify time base: describeRemaining/expiryLine share the run's nowSec
-  with decide() instead of live Date.now() (no drift in long loops)
-- fix decide() comment (exact boundary: remaining == 180d renews)
-
-Tests:
-- new tools/test-glados.mjs: 3 mock e2e scenarios (exchange 500 / insufficient
-  points / auth failure + legacy token), wired into smoke.ps1
-- full regression 21/21 passing
+- tools/live-run.mjs: run a builtin script against real APIs with CPU
+  metering; params via env/file only, never committed
+- tools/cpu-bench.mjs: pure-JS CPU benchmark with in-process mock fetch
+  (TLS/DNS excluded, matching Workers isolate accounting). Results:
+  GLaDOS 0.10-0.16 ms/run, 3-account worst 0.16 ms; DNSHE 10 domains
+  0.31 ms, 30 domains 0.47 ms; combined worst-case ~0.63 ms vs 10 ms
+  free-plan budget (per DO alarm invocation, serial heartbeat)
+- verified live: GLaDOS real checkin OK (+7 pts, no exchange below 500);
+  DNSHE failure path OK end-to-end (invalid secret -> code + hint + fail push)
