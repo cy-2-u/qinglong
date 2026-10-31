@@ -34,13 +34,13 @@ const BUILTINS = [
   {
     name: 'GLaDOS 签到',
     script_code: GLADOS_SCRIPT,
-    params: { cookie: '', exchange_plan: '', push_level: 'all' },
+    params: { cookie: '' },
     interval_unit: 'd', interval_amount: 1, run_hour: 9, run_day: null,
   },
   {
     name: 'DNSHE 域名续期',
     script_code: DNSHE_SCRIPT,
-    params: { api_key: '', api_secret: '', threshold_days: '180', min_interval: '2', tz_offset: '8', push_level: 'all' },
+    params: { api_key: '', api_secret: '' },
     interval_unit: 'm', interval_amount: 1, run_hour: 9, run_day: 1,
   },
 ];

@@ -1,11 +1,12 @@
 // GLaDOS 自动签到（移植自 reference/glados_checkin.py）
-// 支持多账号（cookie 参数每行一个）、三种 Cookie 格式、域名轮换重试、积分查询、自动兑换、全局通知推送。
+// 支持多账号（cookie 参数每行一个）、三种 Cookie 格式、域名轮换重试、积分查询；
+// 积分够 500 自动兑换 100 天；每次运行都推送汇总。
 // ==qinglong==
 // name: GLaDOS 签到
 // unit: d
 // amount: 1
 // hour: 9
-// params: cookie, exchange_plan, push_level
+// params: cookie
 // ==/qinglong==
 async function main(ctx) {
   const P = ctx.params || {};
@@ -13,7 +14,7 @@ async function main(ctx) {
   if (!raw) throw new Error('缺少参数 cookie');
 
   const DOMAINS = ['https://glados.cloud', 'https://glados.rocks', 'https://glados.network'];
-  const PLANS = { '100': ['plan100', 100, 10], '200': ['plan200', 200, 30], '500': ['plan500', 500, 100] };
+  const PLAN = ['plan500', 500, 100]; // 积分够 500 自动兑换 100 天
   const SUCCESS = ['checkin! got', 'checkin repeats! please try tomorrow', "today's observation logged"];
   const AUTH_FAIL = ['没有权限', 'permission', 'unauthorized', 'automated check-in detected'];
   const BROWSER = {
@@ -56,9 +57,7 @@ async function main(ctx) {
   const cookies = raw.split(/\n|&/).map(parseCookie).filter(Boolean);
   if (!cookies.length) throw new Error('cookie 参数解析失败，请粘贴完整 Cookie');
 
-  const planKey = String(P.exchange_plan || '').trim();
-  if (planKey && !PLANS[planKey]) ctx.log('exchange_plan 值无效，可选 100/200/500，本次跳过兑换');
-  const pushLevel = String(P.push_level || 'all').trim().toLowerCase();
+  ctx.log('已启用自动兑换: 500 积分 -> 100 天');
 
   function isAuthFailure(res) {
     if (!res || typeof res !== 'object') return false;
@@ -151,11 +150,10 @@ async function main(ctx) {
     return s;
   }
 
-  async function tryExchange(client, key, basePoints) {
-    const plan = PLANS[key];
-    if (!basePoints || basePoints < plan[1]) return ['skip', '积分不足(' + (basePoints == null ? '?' : basePoints) + '/' + plan[1] + '分)'];
-    const res = await client.exchange(plan[0]);
-    if (res && String(res.code) === '0') return ['ok', '兑换成功 +' + plan[2] + '天'];
+  async function tryExchange(client, basePoints) {
+    if (!basePoints || basePoints < PLAN[1]) return ['skip', '积分不足(' + (basePoints == null ? '?' : basePoints) + '/' + PLAN[1] + '分)'];
+    const res = await client.exchange(PLAN[0]);
+    if (res && String(res.code) === '0') return ['ok', '兑换成功 +' + PLAN[2] + '天'];
     const msg = String((res && res.message) || '未知错误').replace(/\s+/g, ' ').slice(0, 120);
     return ['fail', '兑换失败: ' + msg];
   }
@@ -183,12 +181,10 @@ async function main(ctx) {
     if (ok) okCount++;
 
     let summary = await fetchSummary(client);
-    if (PLANS[planKey]) {
-      const st = await tryExchange(client, planKey, summary.basePoints);
-      ctx.log('账号 ' + (i + 1) + ' | ' + st[1]);
-      if (st[0] === 'ok') summary = await fetchSummary(client);
-      else if (st[0] === 'fail') summary.options = (summary.options + '\n' + st[1]).trim();
-    }
+    const st = await tryExchange(client, summary.basePoints);
+    ctx.log('账号 ' + (i + 1) + ' | ' + st[1]);
+    if (st[0] === 'ok') summary = await fetchSummary(client);
+    else if (st[0] === 'fail') summary.options = (summary.options + '\n' + st[1]).trim();
 
     ctx.log('账号 ' + (i + 1) + ' | 积分: ' + summary.points + ' | 天数: ' + summary.leftDays + ' | 结果: ' + message);
     blocks.push(

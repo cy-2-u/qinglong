@@ -7,13 +7,17 @@
 // amount: 1
 // day: 1
 // hour: 9
-// params: api_key, api_secret, threshold_days, min_interval, tz_offset, push_level
+// params: api_key, api_secret
 // ==/qinglong==
 async function main(ctx) {
   const P = ctx.params || {};
   const API_KEY = String(P.api_key || '').trim();
   const API_SECRET = String(P.api_secret || '').trim();
-  const BASE_URL = String(P.base_url || '').trim() || 'https://api005.dnshe.com/index.php?m=domain_hub';
+  const BASE_URL = 'https://api005.dnshe.com/index.php?m=domain_hub';
+  const thresholdDays = 180;  // 续期窗口阈值（文档：到期前 180 天开窗）
+  const minInterval = 2;      // 相邻 API 调用最小间隔（秒），防 60 次/分钟限流
+  const tzOffSec = 8 * 3600;  // 到期时间按北京时间解读
+  const tzLabel = 'UTC+8';
   const PAGE_SIZE = 500;   // 文档：per_page 上限 500，取上限减少翻页与限流
   const MAX_PAGES = 100;
   const LIST_FIELDS = 'id,subdomain,rootdomain,full_domain,status,expires_at,never_expires';
@@ -39,29 +43,6 @@ async function main(ctx) {
     ctx.log(msg);
     await ctx.notify('DNSHE 域名续期失败', msg);
     throw new Error(msg);
-  }
-
-  function numParam(raw, def, label) {
-    const s = String(raw == null ? '' : raw).trim();
-    if (!s) return def;
-    const v = Number(s);
-    if (!isFinite(v)) { ctx.log('警告: ' + label + '=' + s + ' 不是合法数值，回退到 ' + def); return def; }
-    return v;
-  }
-  const thresholdDays = numParam(P.threshold_days, 180, 'threshold_days');
-  const minInterval = numParam(P.min_interval, 2, 'min_interval');
-  let tzHours = numParam(P.tz_offset, 8, 'tz_offset');
-  if (!(tzHours > -24 && tzHours < 24)) {
-    ctx.log('警告: tz_offset=' + tzHours + ' 超出范围，回退到 UTC+8');
-    tzHours = 8;
-  }
-  const tzOffSec = Math.round(tzHours * 3600);
-  const tzAbs = Math.abs(tzHours);
-  const tzLabel = 'UTC' + (tzHours >= 0 ? '+' : '-') + (tzAbs % 1 ? tzAbs.toFixed(1) : Math.round(tzAbs));
-  let pushLevel = String(P.push_level || 'all').trim().toLowerCase();
-  if (pushLevel !== 'all' && pushLevel !== 'fail_only') {
-    ctx.log('警告: push_level=' + pushLevel + ' 无效，可选 all / fail_only，回退到 all');
-    pushLevel = 'all';
   }
 
   const START_MS = Date.now();
@@ -513,11 +494,7 @@ async function main(ctx) {
   if (report.failures.length) summaryParts.push('', '完整明细见面板运行日志');
 
   const title = hasFailure ? 'DNSHE 域名续期失败' : 'DNSHE 域名自动续期报告';
-  if (pushLevel === 'fail_only' && !hasFailure) {
-    ctx.log('push_level=fail_only 且本次全部正常，跳过推送');
-  } else {
-    await ctx.notify(title, summaryParts.join('\n'));
-  }
+  await ctx.notify(title, summaryParts.join('\n'));
 
   if (hasFailure) throw new Error('存在 ' + report.failures.length + ' 个失败项，详见运行日志');
 }

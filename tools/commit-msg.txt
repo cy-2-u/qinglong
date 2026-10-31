@@ -1,14 +1,16 @@
-feat: full DNSHE renewal port + repo to public
+feat: trim scripts for personal use + fully automated CI
 
-- src/scripts/dnshe-renew.txt: complete port from reference/dnshe_renew_domains.py
-  - paged listing with total verification + dedupe (no silent truncation)
-  - precise renewal-window decision (exact time diff, 180-day boundary)
-  - PHP tinyint safe bool for never_expires, id normalization
-  - GET retry on net/429/5xx; renew only on 429 (side-effect safe)
-  - error_code first over HTTP status, hint table, days_until_window surfaced
-  - quota line with zero-credit warning, abnormal status flagged
-  - detail logs + summary push via global MeoW (fail_only supported)
-- seed.js: DNSHE builtin params scaffolding (threshold/min_interval/tz/push_level)
-- tools/test-dnshe.mjs: 6 mock end-to-end tests, all passing
-- smoke.ps1: dnshe tests added to regression; README roadmap updated
-- repo visibility: private -> public
+Scripts:
+- GLaDOS: drop exchange_plan/push_level params; auto-exchange fixed to
+  plan 500 (500pts -> 100 days); always push summary
+- DNSHE: hardcode threshold_days=180, min_interval=2, tz=UTC+8,
+  base_url=official endpoint; drop push_level; always push report
+- seed.js: builtin params now {cookie} / {api_key, api_secret} only
+
+CI (deploy.yml):
+- auto resolve-or-create D1 database 'qinglong' and patch wrangler.toml
+  placeholder ID via Cloudflare API (no manual d1 create + paste)
+- optional PANEL_PASSWORD GitHub secret auto-synced as worker secret
+- pin wranglerVersion=latest (was resolving old 3.90.0)
+
+README: deployment section rewritten around the automated flow

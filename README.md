@@ -46,50 +46,27 @@ qinglong/
 └── .github/workflows/deploy.yml
 ```
 
-## 部署到 Cloudflare（新账号，一次性约 5 分钟）
+## 部署到 Cloudflare（全自动，只需配 Secrets）
 
-前提：Node 18+。以下命令在本目录执行（未装 wrangler 时把 `npx wrangler` 换成 `npx wrangler@latest`）。
+在 GitHub 仓库 Settings → Secrets and variables → Actions 配置后，push main 即完成一切：
 
-1. **登录**
+| Secret | 必填 | 说明 |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | ✅ | 模板 "Edit Cloudflare Workers"，**额外附加 D1 编辑权限**（自动建库要用） |
+| `CLOUDFLARE_ACCOUNT_ID` | ✅ | 账号 ID（Cloudflare 仪表盘首页可见） |
+| `PANEL_PASSWORD` | 可选 | 配置后每次部署自动同步为面板密码；不配则用 `wrangler secret put` 设置过的 |
 
-   ```powershell
-   npx wrangler login
-   ```
+CI 流程（`.github/workflows/deploy.yml`）：
 
-2. **创建 D1 并回填 ID**
+1. 通过 API **查找或创建**名为 `qinglong` 的 D1 库，自动回填 ID（`wrangler.toml` 里的全零占位符无需手动改）
+2. `wrangler deploy`：静态资源 + DO migration + cron trigger 一次完成
+3. 若配置了 `PANEL_PASSWORD` Secret，自动同步为 Worker 密码
 
-   ```powershell
-   npx wrangler d1 create qinglong
-   ```
+部署完成后打开 `https://qinglong.<你的子域>.workers.dev/health`，看到 `"healthy":true`
+即完成上弦；再打开根路径进入面板。任务表与内置脚本在首次访问时自动创建/播种。
 
-   把输出的 `database_id` 填进 `wrangler.toml`（替换全零占位符）。
-
-3. **设置面板密码**
-
-   ```powershell
-   npx wrangler secret put PANEL_PASSWORD
-   ```
-
-4. **部署**
-
-   ```powershell
-   npx wrangler deploy
-   ```
-
-   wrangler 会一并完成：静态资源上传、DO migration、cron trigger 注册。
-   表结构与内置脚本在首次访问时自动创建/播种，无需手工执行 SQL。
-
-5. **验证**：打开 `https://qinglong.<你的子域>.workers.dev/health`，看到
-   `"healthy":true` 即完成上弦；再打开根路径进入面板（用第 3 步的密码登录）。
-
-## GitHub Actions 自动部署
-
-仓库 Secrets 里配两个值后，push main 即自动部署：
-
-| Secret | 说明 |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | 模板 "Edit Cloudflare Workers"，额外附加 D1 编辑权限 |
-| `CLOUDFLARE_ACCOUNT_ID` | 账号 ID（仪表盘首页可见） |
+本地手动部署（可选）：`npx wrangler login && npx wrangler deploy`；
+本地开发 `npx wrangler dev`（D1/DO 均为本地模拟，占位符 ID 可直接用）。
 
 ## 本地开发
 

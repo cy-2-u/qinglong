@@ -20,7 +20,8 @@ rules = [
   { type = "Text", globs = ["**/*.txt"] }
 ]
 
-# ⚠ 一次性步骤：wrangler d1 create qinglong 后，把返回的 database_id 填到这里
+# D1 库由 CI 自动"查找或创建"名为 qinglong 的库并回填此占位符；
+# 本地 dev（wrangler dev）直接用全零占位符即可
 [[d1_databases]]
 binding = "DB"
 database_name = "qinglong"
