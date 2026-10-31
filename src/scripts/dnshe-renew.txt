@@ -30,7 +30,7 @@ async function main(ctx) {
     auth_ip_not_allowed: '当前出口 IP 不在该密钥的白名单内',
     api_access_disabled: 'DNSHE 后台已关闭 API 访问',
     quota_exceeded: '账户额度不足',
-    rate_limit_exceeded: '触发接口频率限制，请调大 min_interval 参数',
+    rate_limit_exceeded: '触发接口频率限制，请稍后再运行一次',
     provider_operation_failed: '上游 DNS 服务商操作失败，稍后重试',
     internal_error: 'DNSHE 服务端内部错误',
     subdomain_not_found: '域名不存在或不属于当前 API Key',
@@ -46,10 +46,10 @@ async function main(ctx) {
   }
 
   const START_MS = Date.now();
-  function bjTime(ms) {
-    return new Date((ms == null ? START_MS : ms) + tzOffSec * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  function bjTime() {
+    return new Date(START_MS + tzOffSec * 1000).toISOString().replace('T', ' ').slice(0, 19);
   }
-  const runStamp = '运行时间：' + bjTime(START_MS) + ' (' + tzLabel + ')';
+  const runStamp = '运行时间：' + bjTime() + ' (' + tzLabel + ')';
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -161,7 +161,7 @@ async function main(ctx) {
       }
       return data;
     }
-    throw new Error('续期多次被限流 (429)，请调大 min_interval');
+    throw new Error('续期多次被限流 (429)，请稍后再运行一次');
   }
 
   // PHP 后端常把 tinyint 序列化成字符串，bool("0") 是 true——never_expires 误判
@@ -215,26 +215,27 @@ async function main(ctx) {
     return '  [!] 域名状态 ' + ab;
   }
 
-  // 剩余天数（未满一天也算一天）；已过期显示 "已过期 N 天"（不足一天算一天）
-  function describeRemaining(expiresAtSec) {
+  // 剩余天数（未满一天也算一天）；已过期显示 "已过期 N 天"（不足一天算一天）。
+  // 与 decide 共用同一 nowSec，避免长循环内时间基准漂移。
+  function describeRemaining(expiresAtSec, nowSec) {
     if (expiresAtSec == null) return null;
-    const deltaDays = (expiresAtSec * 1000 - Date.now()) / 86400000;
+    const deltaDays = (expiresAtSec - nowSec) / 86400;
     if (deltaDays < 0) return '已过期 ' + (-Math.floor(deltaDays)) + ' 天';
     return '剩余 ' + Math.ceil(deltaDays) + ' 天';
   }
 
-  function expiryLine(view) {
+  function expiryLine(view, nowSec) {
     const note = statusNote(view);
     if (view.problem) return view.label + ': 到期时间 未知（记录异常）' + note;
     if (view.neverExpires) return view.label + ': 到期时间 永久有效' + note;
-    const remaining = describeRemaining(view.expiresAtSec);
+    const remaining = describeRemaining(view.expiresAtSec, nowSec);
     if (remaining) return view.label + ': 到期时间 ' + view.expiresRaw + ' (' + remaining + ')' + note;
     if (view.expiresRaw) return view.label + ': 到期时间 ' + view.expiresRaw + ' (无法解析剩余天数)' + note;
     return view.label + ': 到期时间 未知' + note;
   }
 
-  // 判定：invalid / never / skip / renew。用精确时间差，不用取整后的天数——
-  // 文档写"180 天前开窗"，剩余 180 天 0 小时 30 分时窗口其实已经开了。
+  // 判定：invalid / never / skip / renew。用精确时间差而非取整天数——
+  // 剩余恰好 180 天时窗口已开（要续期），取整天数会把边界误判成跳过。
   function decide(view, nowSec) {
     if (view.problem) return 'invalid';
     if (view.neverExpires) return 'never';
@@ -425,7 +426,7 @@ async function main(ctx) {
       }
     }
 
-    expiryLines.push(expiryLine(view));
+    expiryLines.push(expiryLine(view, nowSec));
     const action = decide(view, nowSec);
     // 状态异常与是否续期无关：被暂停/过期的域名即使远离续期窗口也要提醒
     const ab = statusAbnormal(view.status);
@@ -439,7 +440,7 @@ async function main(ctx) {
       renewalResults.push('[SKIP] ' + view.label + ': 已设置为永不过期，跳过续期' + statusNote(view));
       report.neverExpires += 1;
     } else if (action === 'skip') {
-      renewalResults.push('[SKIP] ' + view.label + ': ' + describeRemaining(view.expiresAtSec) + ' > ' + thresholdDays + ' 天，尚未进入续期窗口，跳过' + statusNote(view));
+      renewalResults.push('[SKIP] ' + view.label + ': ' + describeRemaining(view.expiresAtSec, nowSec) + ' > ' + thresholdDays + ' 天，尚未进入续期窗口，跳过' + statusNote(view));
       report.notInWindow += 1;
     } else {
       const outcome = await renewOne(view);
@@ -456,7 +457,7 @@ async function main(ctx) {
         // 续期成功后刷新到期清单，避免第二段显示续期前的旧时间
         view.expiresRaw = outcome.newExpiry;
         view.expiresAtSec = parseExpiry(outcome.newExpiry);
-        expiryLines[expiryLines.length - 1] = expiryLine(view);
+        expiryLines[expiryLines.length - 1] = expiryLine(view, nowSec);
       }
     }
   }

@@ -10,6 +10,8 @@ node (Join-Path $PSScriptRoot 'test-nextrun.mjs')
 if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: nextrun'; exit 1 }
 node (Join-Path $PSScriptRoot 'test-dnshe.mjs')
 if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: dnshe'; exit 1 }
+node (Join-Path $PSScriptRoot 'test-glados.mjs')
+if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: glados'; exit 1 }
 
 # 2) panel scripts (plain check)
 $panel = @('app.js', 'api.js', 'mock.js')

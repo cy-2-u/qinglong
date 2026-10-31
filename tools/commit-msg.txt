@@ -1,16 +1,17 @@
-feat: trim scripts for personal use + fully automated CI
+fix: remove leftover pushLevel block (crash) + script audit cleanup
 
-Scripts:
-- GLaDOS: drop exchange_plan/push_level params; auto-exchange fixed to
-  plan 500 (500pts -> 100 days); always push summary
-- DNSHE: hardcode threshold_days=180, min_interval=2, tz=UTC+8,
-  base_url=official endpoint; drop push_level; always push report
-- seed.js: builtin params now {cookie} / {api_key, api_secret} only
+GLaDOS:
+- remove residual fail_only block referencing deleted pushLevel variable
+  (would throw ReferenceError on every run) - caught by adding tests
+- always-push behavior confirmed by tests
 
-CI (deploy.yml):
-- auto resolve-or-create D1 database 'qinglong' and patch wrangler.toml
-  placeholder ID via Cloudflare API (no manual d1 create + paste)
-- optional PANEL_PASSWORD GitHub secret auto-synced as worker secret
-- pin wranglerVersion=latest (was resolving old 3.90.0)
+DNSHE:
+- rate-limit hints no longer tell user to tune min_interval (now hardcoded)
+- unify time base: describeRemaining/expiryLine share the run's nowSec
+  with decide() instead of live Date.now() (no drift in long loops)
+- fix decide() comment (exact boundary: remaining == 180d renews)
 
-README: deployment section rewritten around the automated flow
+Tests:
+- new tools/test-glados.mjs: 3 mock e2e scenarios (exchange 500 / insufficient
+  points / auth failure + legacy token), wired into smoke.ps1
+- full regression 21/21 passing

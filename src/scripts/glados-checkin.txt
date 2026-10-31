@@ -196,11 +196,6 @@ async function main(ctx) {
     );
   }
 
-  if (pushLevel === 'fail_only' && okCount === cookies.length) {
-    ctx.log('所有账号签到成功，push_level=fail_only 跳过推送');
-    return;
-  }
-
   const bj = new Date(Date.now() + 8 * 3600 * 1000);
   const ts = bj.toISOString().replace('T', ' ').slice(0, 19);
   await ctx.notify(
