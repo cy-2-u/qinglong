@@ -102,7 +102,7 @@ npx wrangler dev                   # 本地完整跑（DO/D1 均为本地模拟�
 只调面板样式时不用起 Worker：`node tools/serve.mjs` 后访问 http://127.0.0.1:8137/（演示模式，数据存 localStorage）。
 
 回归检查：`powershell -ExecutionPolicy Bypass -File tools\smoke.ps1`
-（含 `tools/test-nextrun.mjs` 的 12 个调度数学单元测试 + 全部 JS 语法检查。）
+（含调度数学 12 个单元测试、DNSHE 移植 6 个 mock 端到端测试 + 全部 JS 语法检查。）
 
 ## 脚本契约
 
@@ -158,5 +158,5 @@ async function main(ctx) {
 - [x] 面板 UI（列表 / 编辑器 / 导入 / 日志 / 通知设置）
 - [x] Worker 后端（API + 鉴权 + D1 + DO 心跳 + 脚本执行器）
 - [x] GLaDOS 签到脚本移植
-- [ ] DNSHE 域名续期脚本完整移植（骨架已就位，参考 `reference/dnshe_renew_domains.py`）
+- [x] DNSHE 域名续期脚本完整移植（含 mock 端到端测试 `tools/test-dnshe.mjs`）
 - [ ] 面板在线编辑体验增强（语法高亮等，可选）

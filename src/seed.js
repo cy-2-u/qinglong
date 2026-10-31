@@ -40,7 +40,7 @@ const BUILTINS = [
   {
     name: 'DNSHE 域名续期',
     script_code: DNSHE_SCRIPT,
-    params: { api_key: '', api_secret: '', threshold_days: '180' },
+    params: { api_key: '', api_secret: '', threshold_days: '180', min_interval: '2', tz_offset: '8', push_level: 'all' },
     interval_unit: 'm', interval_amount: 1, run_hour: 9, run_day: 1,
   },
 ];

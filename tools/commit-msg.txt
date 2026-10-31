@@ -1,13 +1,14 @@
-feat: QingLong Workers v0.1 — panel + worker backend
+feat: full DNSHE renewal port + repo to public
 
-- Panel (public/): vanilla SPA — task list, editor with 时/天/月 slider,
-  script import (==qinglong== task header auto-fill), MeoW notify settings, logs
-- Worker (src/index.js): /api/* with HMAC cookie auth, cron watchdog, /health
-- TaskScheduler DO: hourly alarm heartbeat, single-flight lock, self re-arm
-- Runner: new Function compile, ctx.params/log/notify/fetch, 90s task timeout,
-  per-request fetch fuse, 200-line ring-buffered logs in D1
-- D1: tasks/logs/settings, auto schema migration + builtin seeding on first hit
-- nextrun.js: Beijing-anchored schedules (h/d/m), catch-up once, month clamping
-- Builtin scripts: GLaDOS checkin fully ported from reference/glados_checkin.py;
-  DNSHE renewal skeleton (full port pending)
-- CI: wrangler-action deploy on push to main
+- src/scripts/dnshe-renew.txt: complete port from reference/dnshe_renew_domains.py
+  - paged listing with total verification + dedupe (no silent truncation)
+  - precise renewal-window decision (exact time diff, 180-day boundary)
+  - PHP tinyint safe bool for never_expires, id normalization
+  - GET retry on net/429/5xx; renew only on 429 (side-effect safe)
+  - error_code first over HTTP status, hint table, days_until_window surfaced
+  - quota line with zero-credit warning, abnormal status flagged
+  - detail logs + summary push via global MeoW (fail_only supported)
+- seed.js: DNSHE builtin params scaffolding (threshold/min_interval/tz/push_level)
+- tools/test-dnshe.mjs: 6 mock end-to-end tests, all passing
+- smoke.ps1: dnshe tests added to regression; README roadmap updated
+- repo visibility: private -> public

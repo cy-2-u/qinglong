@@ -5,9 +5,11 @@ $tmp = Join-Path $env:TEMP 'ql_smoke_tmp'
 if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
-# 1) scheduler math unit tests
+# 1) scheduler math + builtin script tests
 node (Join-Path $PSScriptRoot 'test-nextrun.mjs')
 if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: nextrun'; exit 1 }
+node (Join-Path $PSScriptRoot 'test-dnshe.mjs')
+if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: dnshe'; exit 1 }
 
 # 2) panel scripts (plain check)
 $panel = @('app.js', 'api.js', 'mock.js')
