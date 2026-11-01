@@ -1,6 +1,6 @@
-/* 青龙 · Workers 版 —— 面板逻辑
+/* 青龙 —— 面板逻辑
  * 纯 vanilla：事件委托 + 模板字符串渲染。视图：登录 / 任务列表 / 编辑器；
- * 弹窗：日志 / 导入 / 通知设置 / 删除确认。 */
+ * 弹窗：日志 / 通知设置 / 删除确认。任务脚本来自仓库内置库，面板不存脚本文本。 */
 (function () {
   'use strict';
 
@@ -77,7 +77,7 @@
     theme: localStorage.getItem('ql.theme') || 'light',
     view: 'list',
     tasks: [],
-    builtins: [],          // 内置任务库（key/name/params/code），登录后加载
+    builtins: [],          // 内置任务库（key/name/params），登录后加载
     editing: null,
     confirmResolver: null
   };
@@ -155,23 +155,38 @@
     var main = $('#main');
     if (!main) return;
 
+    var enabled = App.tasks.filter(function (t) { return t.enabled; });
+    var next = null;
+    enabled.forEach(function (t) {
+      if (t.next_run_at && (!next || t.next_run_at < next.next_run_at)) next = t;
+    });
+
     var cards = App.tasks.map(taskCard).join('');
+    var strip =
+      '<div class="strip">' +
+      '  <span>共 ' + App.tasks.length + ' 个任务 · 启用 ' + enabled.length + '</span>' +
+      (next
+        ? '<span class="dot">·</span><span>下一次 <b>' + esc(next.name) + '</b> ' + fmtShort(next.next_run_at) + '（' + fmtRel(next.next_run_at) + '）</span>'
+        : '') +
+      '</div>';
+
     if (!App.tasks.length) {
       cards =
         '<div class="card empty">' +
         '  <div class="empty-t">还没有任务</div>' +
-        '  <div class="empty-s">新建一个，或在编辑器里导入现成脚本</div>' +
+        '  <div class="empty-s">点右上角「新建任务」，把内置脚本绑定到一份运行计划</div>' +
         '</div>';
+      strip = '';
     }
 
     main.innerHTML =
       '<div class="toolbar">' +
       '  <h2>定时任务</h2>' +
       '  <div class="toolbar-ops">' +
-      '    <button class="btn ghost icon-btn" data-action="refresh" title="刷新">' + ICONS.refresh + '</button>' +
+      '    <button class="btn ghost icon-btn" data-action="refresh" data-tip="刷新">' + ICONS.refresh + '</button>' +
       '    <button class="btn primary" data-action="new-task">' + ICONS.plus + ' 新建任务</button>' +
       '  </div>' +
-      '</div>' + cards;
+      '</div>' + strip + cards;
   }
 
   function taskCard(t) {

@@ -1,16 +1,11 @@
-fix: real dark mode + qtip styles that never shipped
+feat: final pre-launch audit - favicon, summary strip, copy cleanup
 
-Dark mode:
-- dark class lived on <body> but the CSS vars are defined at :root;
-  custom properties don't inherit upwards, so the html canvas kept the
-  light cream background and short pages showed a light bottom half.
-  Class moved to documentElement, selectors body.dark -> html.dark
-
-Tooltips:
-- the .qtip stylesheet block was silently lost in a failed find/replace
-  last round - tooltips rendered as unstyled text appended at the end
-  of the document (bottom-left). Styles added (light + dark variants)
-
-Cache:
-- index.html now references assets with ?v= version param so deploys
-  reach browsers without hard refresh
+- site icon: terracotta rounded square + open white ring + hub dot
+  (coiled dragon / timer mark), svg favicon + theme-color meta
+- task list: slim summary strip under the toolbar (task/enabled counts +
+  next scheduled task with time) fills the page and reads at a glance
+- copy: stale "import scripts" empty-state text, "Workers 版" header
+  comment, builtins comment (code field removed earlier)
+- no dead code found in app.js/index.js/runner.js/seed.js on re-read;
+  css verified clean (.label-row absent, .strip added)
+- asset version bumped to 20261101c
