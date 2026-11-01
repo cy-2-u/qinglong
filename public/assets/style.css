@@ -90,15 +90,57 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3.5px var(--accent-soft);
 }
 textarea { resize: vertical; }
-/* 自绘下拉箭头：内移且跨浏览器一致（替代原生样式） */
-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a8574' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 9px center;
-  padding-right: 28px;
+
+/* 自绘下拉（替代原生 select 及其不可控的系统弹层） */
+.dd { position: relative; }
+.dd-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  font-size: 13.5px;
+  color: var(--text);
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: border-color 0.16s, box-shadow 0.16s;
 }
+.dd-btn:hover { border-color: var(--border-strong); }
+.dd.open .dd-btn {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3.5px var(--accent-soft);
+}
+.dd-btn:focus-visible { outline: none; box-shadow: 0 0 0 3.5px var(--accent-soft); }
+.dd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-chevron { display: flex; color: var(--muted); transition: transform 0.18s; }
+.dd.open .dd-chevron { transform: rotate(180deg); }
+.dd-list {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  z-index: 80;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-2);
+  padding: 4px;
+  max-height: 246px;
+  overflow: auto;
+  animation: fade-in 0.14s ease-out;
+}
+.dd-opt {
+  padding: 7px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.dd-opt:hover { background: var(--panel2); }
+.dd-opt.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.dd-wide .dd-btn { min-width: 190px; }
 
 .hidden { display: none !important; }
 .muted { color: var(--muted); }

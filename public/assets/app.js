@@ -53,6 +53,7 @@
     moon: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.7A6.2 6.2 0 1 1 6.3 2.5a4.9 4.9 0 0 0 7.2 7.2z"/></svg>',
     gear: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><circle cx="10.5" cy="4.5" r="1.7" fill="var(--panel)"/><circle cx="5.5" cy="8" r="1.7" fill="var(--panel)"/><circle cx="9" cy="11.5" r="1.7" fill="var(--panel)"/></svg>',
     close: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+    chev: '<svg viewBox="0 0 10 6" width="10" height="6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg>',
     back: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>'
   };
 
@@ -83,6 +84,35 @@
 
   function builtinByKey(key) {
     return App.builtins.find(function (b) { return b.key === key; }) || null;
+  }
+
+  // ---------- 自绘下拉组件（替代原生 select，弹层样式可控） ----------
+  function ddHtml(id, items, value, cls) {
+    var cur = items.filter(function (it) { return String(it.value) === String(value); })[0];
+    var opts = items.map(function (it) {
+      return '<div class="dd-opt' + (String(it.value) === String(value) ? ' active' : '') + '" data-value="' + esc(it.value) + '">' + esc(it.label) + '</div>';
+    }).join('');
+    return (
+      '<div class="dd ' + (cls || '') + '" id="' + id + '" data-value="' + esc(value) + '">' +
+      '  <button type="button" class="dd-btn">' +
+      '    <span class="dd-label">' + esc(cur ? cur.label : '') + '</span>' +
+      '    <span class="dd-chevron">' + ICONS.chev + '</span>' +
+      '  </button>' +
+      '  <div class="dd-list hidden">' + opts + '</div>' +
+      '</div>'
+    );
+  }
+  function ddValue(id) {
+    var dd = $('#' + id);
+    return dd ? dd.dataset.value : null;
+  }
+  function closeAllDd(except) {
+    $all('.dd').forEach(function (dd) {
+      if (dd !== except) {
+        $('.dd-list', dd).classList.add('hidden');
+        dd.classList.remove('open');
+      }
+    });
   }
 
   // ---------- 登录 ----------
@@ -254,14 +284,9 @@
     var isNew = e.id == null;
     var info = unitInfo(e.unit);
 
-    var builtinOpts = App.builtins.map(function (b) {
-      return '<option value="' + esc(b.key) + '"' + (e.script_key === b.key ? ' selected' : '') + '>' + esc(b.name) + '</option>';
-    }).join('') || '<option value="">（内置库未加载）</option>';
-
-    var hourOpts = '';
-    for (var h = 0; h <= 23; h++) {
-      hourOpts += '<option value="' + h + '"' + (e.hour === h ? ' selected' : '') + '>' + pad2(h) + ':00</option>';
-    }
+    var builtinItems = App.builtins.map(function (b) { return { value: b.key, label: b.name }; });
+    var hourItems = [];
+    for (var h = 0; h <= 23; h++) hourItems.push({ value: h, label: pad2(h) + ':00' });
 
     $('#main').innerHTML =
       '<div class="toolbar">' +
@@ -293,7 +318,7 @@
       }).join('') +
       '      </div>' +
       '      <span id="rowHour" class="freq-opt' + (e.unit === 'h' ? ' hidden' : '') + '">时刻' +
-      '        <select id="fHour" class="freq-hour">' + hourOpts + '</select>' +
+              ddHtml('ddHour', hourItems, e.hour, 'freq-hour') +
       '      </span>' +
       '      <span id="rowDay" class="freq-opt' + (e.unit === 'm' ? '' : ' hidden') + '">每月' +
       '        <input type="number" id="fDay" class="freq-day" min="1" max="28" value="' + e.day + '">日' +
@@ -314,7 +339,7 @@
       '  <div class="form-sec">' +
       '    <div class="sec-head"><span class="sec-title">脚本</span>' +
       (isNew
-        ? '      <select id="fBuiltin" class="freq-hour">' + builtinOpts + '</select>'
+        ? ddHtml('fBuiltin', builtinItems, e.script_key, 'dd-wide')
         : '      <span class="muted">' + esc((builtinByKey(e.script_key) || {}).name || e.script_key || '未知') + '</span>') +
       '    </div>' +
       '  </div>' +
@@ -357,7 +382,7 @@
     if (!e) return;
     var amountEl = $('#fAmount');
     if (amountEl) e.amount = clamp(Math.round(+amountEl.value) || e.amount, 1, unitInfo(e.unit).max);
-    if ($('#rowHour') && !$('#rowHour').classList.contains('hidden')) e.hour = clamp(+$('#fHour').value || 0, 0, 23);
+    if ($('#rowHour') && !$('#rowHour').classList.contains('hidden')) e.hour = clamp(+ddValue('ddHour') || 0, 0, 23);
     if ($('#rowDay') && !$('#rowDay').classList.contains('hidden')) e.day = clamp(+$('#fDay').value || 1, 1, 28);
   }
 
@@ -381,7 +406,7 @@
     var el = $('#freqPreview');
     if (!el || !App.editing) return;
     var amount = clamp(+$('#fAmount').value || 1, 1, +$('#fAmount').max);
-    var hour = clamp(+$('#fHour').value || 0, 0, 23);
+    var hour = clamp(+ddValue('ddHour') || 0, 0, 23);
     var day = clamp(+$('#fDay').value || 1, 1, 28);
     el.innerHTML = '运行于 <b>' + esc(previewText(App.editing.unit, amount, hour, day)) + '</b>，心跳每小时检查一次';
   }
@@ -534,7 +559,7 @@
     if (!name) { toast('请填写名称', 'fail'); $('#fName').focus(); return; }
 
     var amount = clamp(Math.round(+$('#fAmount').value || 1), 1, unitInfo(e.unit).max);
-    var run_hour = (e.unit === 'h') ? null : clamp(+$('#fHour').value || 0, 0, 23);
+    var run_hour = (e.unit === 'h') ? null : clamp(+ddValue('ddHour') || 0, 0, 23);
     var run_day = (e.unit === 'm') ? clamp(+$('#fDay').value || 1, 1, 28) : null;
 
     var params = {};
@@ -566,6 +591,40 @@
 
   // ---------- 事件路由 ----------
   function onClick(ev) {
+    // 自绘下拉：选项选择
+    var ddOpt = ev.target.closest('.dd-opt');
+    if (ddOpt) {
+      var dd2 = ddOpt.closest('.dd');
+      dd2.dataset.value = ddOpt.dataset.value;
+      $('.dd-label', dd2).textContent = ddOpt.textContent;
+      $all('.dd-opt', dd2).forEach(function (o) { o.classList.toggle('active', o === ddOpt); });
+      $('.dd-list', dd2).classList.add('hidden');
+      dd2.classList.remove('open');
+      if (dd2.id === 'fBuiltin' && App.editing && App.editing.id == null) {
+        harvestSchedule();
+        harvestParams();
+        App.editing.script_key = dd2.dataset.value;
+        mergeBuiltinParams();
+        renderEditor();
+      } else if (dd2.id === 'ddHour') {
+        if (App.editing) App.editing.hour = +dd2.dataset.value || 0;
+        updateFreqPreview();
+      }
+      return;
+    }
+    // 自绘下拉：开合
+    var ddBtn = ev.target.closest('.dd-btn');
+    if (ddBtn) {
+      var dd = ddBtn.closest('.dd');
+      var wasOpen = dd.classList.contains('open');
+      closeAllDd();
+      if (!wasOpen) {
+        dd.classList.add('open');
+        $('.dd-list', dd).classList.remove('hidden');
+      }
+      return;
+    }
+
     var el = ev.target.closest('[data-action]');
     if (!el) return;
     var action = el.dataset.action;
@@ -660,17 +719,12 @@
         .catch(function (err) { toast('操作失败：' + err.message, 'fail'); el.checked = !el.checked; });
       return;
     }
-    if (el.id === 'fHour' || el.id === 'fDay') updateFreqPreview();
-    // 内置脚本只在新建任务时可选；已有任务的脚本不可更换（避免参数串味）
-    if (el.id === 'fBuiltin' && App.editing && App.editing.id == null) {
-      App.editing.script_key = el.value;
-      mergeBuiltinParams();
-    }
+    if (el.id === 'fDay') updateFreqPreview();
   }
 
   function onInput(ev) {
     var id = ev.target.id;
-    if (id === 'fAmount' || id === 'fHour' || id === 'fDay') updateFreqPreview();
+    if (id === 'fAmount' || id === 'fDay') updateFreqPreview();
   }
 
   function onSubmit(ev) {
@@ -691,7 +745,7 @@
   }
 
   function onKeyDown(ev) {
-    if (ev.key === 'Escape') { closeModal(false); hideQtip(); return; }
+    if (ev.key === 'Escape') { closeModal(false); hideQtip(); closeAllDd(); return; }
   }
 
   // ---------- 入口 ----------
@@ -718,6 +772,9 @@
     document.addEventListener('mouseover', function (ev) {
       var t = ev.target.closest ? ev.target.closest('[data-tip]') : null;
       if (t) showQtip(t, ev); else hideQtip();
+    });
+    document.addEventListener('mousedown', function (ev) {
+      if (!ev.target.closest('.dd')) closeAllDd();
     });
     document.addEventListener('mousedown', hideQtip);
     window.addEventListener('scroll', hideQtip, true);
