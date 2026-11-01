@@ -210,7 +210,7 @@ async function route(request, env, url) {
     return json({
       builtins: Object.keys(BUILTINS).map(function (k) {
         const b = BUILTINS[k];
-        return { key: k, name: b.name, params: b.params, code: b.run.toString() };
+        return { key: k, name: b.name, params: b.params };
       }),
     });
   }

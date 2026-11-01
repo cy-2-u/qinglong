@@ -92,11 +92,19 @@
       '  <form class="login-card" id="loginForm">' +
       '    <div class="win-dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>' +
       '    <h1>青龙</h1>' +
-      (API.mode === 'mock' ? '<p class="muted">演示模式 · 任意密码</p>' : '') +
+      '    <p class="muted hidden" id="loginMode"></p>' +
       '    <input type="password" id="loginPw" placeholder="面板密码" autocomplete="current-password" required>' +
       '    <button class="btn primary block" type="submit">进入</button>' +
       '  </form>' +
       '</div>';
+    // 演示模式提示等探测完成再显示，避免线上在探测窗口期误标为演示
+    API.onReady(function () {
+      var el = $('#loginMode');
+      if (el && API.mode === 'mock') {
+        el.textContent = '演示模式 · 任意密码';
+        el.classList.remove('hidden');
+      }
+    });
     $('#loginPw').focus();
   }
 
@@ -107,9 +115,9 @@
       '  <div class="brand">青龙</div>' +
       '  <div class="top-actions">' +
       '    <span class="mode-badge" id="modeBadge"></span>' +
-      '    <button class="btn ghost icon-btn" id="btnReset" data-action="reset-demo" title="重置演示数据">' + ICONS.refresh + '</button>' +
-      '    <button class="btn ghost icon-btn" data-action="settings" title="通知设置">' + ICONS.gear + '</button>' +
-      '    <button class="btn ghost icon-btn" id="btnTheme" data-action="toggle-theme" title="切换主题"></button>' +
+      '    <button class="btn ghost icon-btn" id="btnReset" data-action="reset-demo" data-tip="重置演示数据">' + ICONS.refresh + '</button>' +
+      '    <button class="btn ghost icon-btn" data-action="settings" data-tip="通知设置">' + ICONS.gear + '</button>' +
+      '    <button class="btn ghost icon-btn" id="btnTheme" data-action="toggle-theme" data-tip="切换主题"></button>' +
       '    <button class="btn ghost" data-action="logout">退出</button>' +
       '  </div>' +
       '</header>' +
@@ -167,7 +175,7 @@
       '    <div class="task-title"><span class="tname">' + esc(t.name) + '</span>' +
       (t.enabled ? '' : '<span class="chip chip-idle">停用</span>') +
       '    </div>' +
-      '    <label class="switch" title="启用 / 停用">' +
+      '    <label class="switch" data-tip="启用 / 停用">' +
       '      <input type="checkbox" data-action="toggle" data-id="' + t.id + '"' + (t.enabled ? ' checked' : '') + '>' +
       '      <span class="slider-knob"></span>' +
       '    </label>' +
@@ -180,10 +188,10 @@
       '      <span class="stat-sub">' + fmtRel(t.next_run_at) + '</span></div></div>' +
       '  </div>' +
       '  <div class="task-foot"><div class="task-actions">' +
-      '    <button class="btn ghost icon-btn" data-action="run" data-id="' + t.id + '" title="立即运行">' + ICONS.play + '</button>' +
-      '    <button class="btn ghost icon-btn" data-action="logs" data-id="' + t.id + '" title="运行日志">' + ICONS.log + '</button>' +
-      '    <button class="btn ghost icon-btn" data-action="edit" data-id="' + t.id + '" title="编辑">' + ICONS.edit + '</button>' +
-      '    <button class="btn ghost icon-btn danger-ghost" data-action="del" data-id="' + t.id + '" title="删除">' + ICONS.trash + '</button>' +
+      '    <button class="btn ghost icon-btn" data-action="run" data-id="' + t.id + '" data-tip="立即运行">' + ICONS.play + '</button>' +
+      '    <button class="btn ghost icon-btn" data-action="logs" data-id="' + t.id + '" data-tip="运行日志">' + ICONS.log + '</button>' +
+      '    <button class="btn ghost icon-btn" data-action="edit" data-id="' + t.id + '" data-tip="编辑">' + ICONS.edit + '</button>' +
+      '    <button class="btn ghost icon-btn danger-ghost" data-action="del" data-id="' + t.id + '" data-tip="删除">' + ICONS.trash + '</button>' +
       '  </div></div>' +
       '</div>'
     );
@@ -211,9 +219,25 @@
     return (amount === 1 ? '每月 ' : '每 ' + amount + ' 月 ') + day + ' 日 ' + hh;
   }
 
-  function currentBuiltinCode(key) {
-    var b = builtinByKey(key);
-    return b && b.code ? b.code : '// 未知内置脚本';
+  // ---------- 自绘浮层提示（替代浏览器原生 title tooltip） ----------
+  var qtipEl = null;
+  function hideQtip() {
+    if (qtipEl) { if (qtipEl.remove) qtipEl.remove(); qtipEl = null; }
+  }
+  function showQtip(target) {
+    hideQtip();
+    var text = target.getAttribute('data-tip');
+    if (!text) return;
+    qtipEl = document.createElement('div');
+    qtipEl.className = 'qtip';
+    qtipEl.textContent = text;
+    document.body.appendChild(qtipEl);
+    var r = target.getBoundingClientRect();
+    var left = clamp(r.left + r.width / 2 - qtipEl.offsetWidth / 2, 8, window.innerWidth - qtipEl.offsetWidth - 8);
+    var top = r.top - qtipEl.offsetHeight - 7;
+    if (top < 8) top = r.bottom + 7;
+    qtipEl.style.left = left + 'px';
+    qtipEl.style.top = top + 'px';
   }
 
   function mergeBuiltinParams() {
@@ -256,7 +280,7 @@
       '  <h2>' + (isNew ? '新建任务' : '编辑任务') + '</h2>' +
       '  <div class="toolbar-ops">' +
       '    <button class="btn" data-action="cancel-edit">' + ICONS.back + ' 返回</button>' +
-      (isNew ? '' : '<button class="btn danger-ghost icon-btn" data-action="del-task-edit" data-id="' + e.id + '" title="删除任务">' + ICONS.trash + '</button>') +
+      (isNew ? '' : '<button class="btn danger-ghost icon-btn" data-action="del-task-edit" data-id="' + e.id + '" data-tip="删除任务">' + ICONS.trash + '</button>') +
       '  </div>' +
       '</div>' +
 
@@ -305,8 +329,7 @@
         ? '      <select id="fBuiltin" class="freq-hour">' + builtinOpts + '</select>'
         : '      <span class="muted">' + esc((builtinByKey(e.script_key) || {}).name || e.script_key || '未知') + '</span>') +
       '    </div>' +
-      '    <pre class="script-view" id="scriptView">' + esc(currentBuiltinCode(e.script_key)) + '</pre>' +
-      '    <div class="hint">内置脚本随仓库更新（只读）。添加新脚本：src/tasks/ 新增模块并在 builtins.js 注册，push 自动部署。</div>' +
+      '    <div class="hint">脚本在仓库 src/tasks/ 维护，push 自动部署，面板只读。</div>' +
       '  </div>' +
 
       // 底部操作
@@ -327,7 +350,7 @@
       '<div class="param-row" data-idx="' + i + '">' +
       '  <input class="pk" placeholder="参数名" value="' + esc(p.k) + '">' +
       '  <textarea class="pv" rows="1" placeholder="参数值">' + esc(p.v) + '</textarea>' +
-      '  <button class="btn ghost icon-btn danger-ghost" data-action="del-param" title="删除">' + ICONS.trash + '</button>' +
+      '  <button class="btn ghost icon-btn danger-ghost" data-action="del-param" data-tip="删除">' + ICONS.trash + '</button>' +
       '</div>'
     );
   }
@@ -435,8 +458,8 @@
     openModal(
       '<div class="modal-head"><b>' + esc(t ? t.name : '') + '</b>' +
       '  <div class="ops">' +
-      '    <button class="btn ghost icon-btn" data-action="refresh-logs" data-id="' + id + '" title="刷新">' + ICONS.refresh + '</button>' +
-      '    <button class="btn ghost icon-btn" data-action="close-modal" title="关闭">' + ICONS.close + '</button>' +
+      '    <button class="btn ghost icon-btn" data-action="refresh-logs" data-id="' + id + '" data-tip="刷新">' + ICONS.refresh + '</button>' +
+      '    <button class="btn ghost icon-btn" data-action="close-modal" data-tip="关闭">' + ICONS.close + '</button>' +
       '  </div>' +
       '</div>' +
       '<div class="modal-body logs" id="logsBody" style="padding-top:12px">加载中…</div>'
@@ -662,7 +685,6 @@
     if (el.id === 'fBuiltin' && App.editing && App.editing.id == null) {
       App.editing.script_key = el.value;
       mergeBuiltinParams();
-      $('#scriptView').textContent = currentBuiltinCode(el.value);
     }
   }
 
@@ -689,7 +711,7 @@
   }
 
   function onKeyDown(ev) {
-    if (ev.key === 'Escape') { closeModal(false); return; }
+    if (ev.key === 'Escape') { closeModal(false); hideQtip(); return; }
   }
 
   // ---------- 入口 ----------
@@ -710,6 +732,13 @@
     document.addEventListener('input', onInput);
     document.addEventListener('submit', onSubmit);
     document.addEventListener('keydown', onKeyDown);
+    // 自绘浮层提示：悬停带 data-tip 的元素时显示，移开/滚动/按下即隐藏
+    document.addEventListener('mouseover', function (ev) {
+      var t = ev.target.closest ? ev.target.closest('[data-tip]') : null;
+      if (t) showQtip(t); else hideQtip();
+    });
+    document.addEventListener('mousedown', hideQtip);
+    window.addEventListener('scroll', hideQtip, true);
     // 会话过期（Cookie 30 天后失效）时全局接管：弹回登录页
     window.addEventListener('ql:unauthorized', function () {
       if (!App.authed) return;

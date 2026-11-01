@@ -8,47 +8,6 @@
   var KEY_LOGS = 'ql.mock.logs';
   var KEY_SETTINGS = 'ql.mock.settings';
 
-  // ---------- 内置脚本示例（注意：内容里不能出现反引号和 ${}，避免与外层模板冲突） ----------
-  var SAMPLE_GLADOS = [
-    'async function main(ctx) {',
-    '  const cookie = ctx.params.cookie;',
-    "  if (!cookie) throw new Error('缺少参数：cookie');",
-    '',
-    "  const res = await ctx.fetch('https://glados.rocks/api/user/checkin', {",
-    "    method: 'POST',",
-    "    headers: { cookie: cookie, 'content-type': 'application/json' },",
-    "    body: JSON.stringify({ token: 'checkin' }),",
-    '  });',
-    '  const data = await res.json();',
-    "  ctx.log('签到结果：' + data.message);",
-    "  await ctx.notify('GLaDOS 签到', String(data.message));",
-    '}'
-  ].join('\n');
-
-  var SAMPLE_DNSHE = [
-    '// DNSHE 免费子域名自动续期（内置库成员，完整逻辑见 src/tasks/dnshe-renew.js）',
-    'export async function run(ctx) {',
-    '  // 分页拉取全部子域名 -> 按阈值判定 -> 逐个续期 -> 汇总推送（全局 MeoW）',
-    '}'
-  ].join('\n');
-
-  var SAMPLE_HEARTBEAT = [
-    '// 最小示例：展示 ctx 的用法',
-    'async function main(ctx) {',
-    "  ctx.log('心跳测试，当前参数：' + JSON.stringify(ctx.params));",
-    '}'
-  ].join('\n');
-
-  var DEFAULT_SCRIPT = [
-    'async function main(ctx) {',
-    '  // ctx.params  当前任务的参数（键值对）',
-    '  // ctx.log(msg) 写入运行日志',
-    '  // ctx.notify(title, content)  推送通知',
-    '  // ctx.fetch(url, init)  带超时保险丝的 fetch',
-    "  ctx.log('你好，青龙');",
-    '}'
-  ].join('\n');
-
   // ---------- 时间工具 ----------
   function nowSec() { return Math.floor(Date.now() / 1000); }
 
@@ -276,9 +235,9 @@
       await sleep(80);
       return {
         builtins: [
-          { key: 'glados-checkin', name: 'GLaDOS 签到', params: ['cookie'], code: SAMPLE_GLADOS },
-          { key: 'dnshe-renew', name: 'DNSHE 域名续期', params: ['api_key', 'api_secret'], code: SAMPLE_DNSHE },
-          { key: 'heartbeat-demo', name: '心跳测试（演示）', params: ['env'], code: SAMPLE_HEARTBEAT }
+          { key: 'glados-checkin', name: 'GLaDOS 签到', params: ['cookie'] },
+          { key: 'dnshe-renew', name: 'DNSHE 域名续期', params: ['api_key', 'api_secret'] },
+          { key: 'heartbeat-demo', name: '心跳测试（演示）', params: ['env'] }
         ]
       };
     },
@@ -305,5 +264,4 @@
   };
 
   window.MockAPI = MockAPI;
-  window.QL_DEFAULT_SCRIPT = DEFAULT_SCRIPT;
 })();

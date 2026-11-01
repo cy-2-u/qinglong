@@ -90,6 +90,15 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3.5px var(--accent-soft);
 }
 textarea { resize: vertical; }
+/* 自绘下拉箭头：内移且跨浏览器一致（替代原生样式） */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a8574' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  padding-right: 28px;
+}
 
 .hidden { display: none !important; }
 .muted { color: var(--muted); }
@@ -433,20 +442,6 @@ body.dark .chip-idle  { background: rgba(165, 161, 145, 0.14); }
   .param-row { grid-template-columns: 1fr auto; }
   .param-row .pk { grid-column: 1 / -1; }
   .task-stats { grid-template-columns: 1fr; gap: 8px; }
-}
-
-.script-view {
-  margin: 0;
-  max-height: 340px;
-  overflow: auto;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  line-height: 1.65;
-  background: var(--input);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  padding: 12px 14px;
-  white-space: pre;
 }
 
 /* ============ 登录页 ============ */
