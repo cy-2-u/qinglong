@@ -1,8 +1,11 @@
-fix: import DurableObject base class; drop misplaced rules entry
+fix: API contract - tasks always return params as an object
 
-- scheduler.js: extend DurableObject from 'cloudflare:workers' - it is not
-  a global, deploy validation failed with ReferenceError (code 10021)
-- wrangler.toml: remove rules=[...] - it sat after [vars] so TOML turned
-  it into an env var (env.rules in bindings); wrangler's built-in default
-  rule already maps **/*.txt to Text modules
-- tools/ci-log.ps1: reusable CI log fetcher (replaces the deleted one-off)
+D1 stores params as a JSON string (TEXT column); the endpoints returned
+rows as-is, so live mode sent params as a string and the editor's
+Object.keys() exploded it into one param row per character (the
+"{" "c" "o" "o" "k" "i" "e"... rows). Mock mode returned real objects
+so the contract mismatch never surfaced locally.
+
+- toClientTask() parses params (fallback {} on bad JSON) and is applied
+  to every endpoint that returns a task row (list/create/update/patch)
+- runner already parsed params defensively, unaffected

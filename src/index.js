@@ -108,6 +108,16 @@ function scheduleChanged(a, b) {
     a.run_day !== b.run_day;
 }
 
+// API 契约：params 一律以对象返回（D1 里存的是 JSON 字符串，原样返回会被
+// 前端 Object.keys 逐字符拆开）。解析失败回退为空对象，绝不抛错。
+function toClientTask(row) {
+  if (!row) return row;
+  let params = {};
+  try { params = JSON.parse(row.params || '{}'); } catch (e) { params = {}; }
+  if (!params || typeof params !== 'object') params = {};
+  return Object.assign({}, row, { params: params });
+}
+
 async function bodyJson(request) {
   const b = await request.json().catch(() => null);
   if (!b || typeof b !== 'object') throw new HttpError('请求体须为 JSON');
@@ -145,7 +155,7 @@ async function route(request, env, url) {
 
     if (!id && method === 'GET') {
       const { results } = await db.prepare('SELECT * FROM tasks ORDER BY id').all();
-      return json({ tasks: results || [] });
+      return json({ tasks: (results || []).map(toClientTask) });
     }
     if (!id && method === 'POST') {
       const t = normalizeTask(await bodyJson(request));
@@ -154,7 +164,7 @@ async function route(request, env, url) {
         'INSERT INTO tasks (name, enabled, script_code, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?)'
       ).bind(t.name, t.enabled, t.script_code, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
       const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(res.meta.last_row_id).first();
-      return json({ task });
+      return json({ task: toClientTask(task) });
     }
     if (id && sub === 'run' && method === 'POST') {
       const status = await schedulerStub(env).runTask(id);
@@ -177,13 +187,13 @@ async function route(request, env, url) {
         'UPDATE tasks SET name=?, enabled=?, script_code=?, params=?, interval_amount=?, interval_unit=?, run_hour=?, run_day=?, next_run_at=? WHERE id=?'
       ).bind(t.name, t.enabled, t.script_code, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next, id).run();
       const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
-      return json({ task });
+      return json({ task: toClientTask(task) });
     }
     if (id && method === 'PATCH') {
       const body = await bodyJson(request);
       await db.prepare('UPDATE tasks SET enabled=? WHERE id=?').bind(body.enabled ? 1 : 0, id).run();
       const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
-      return json({ task });
+      return json({ task: toClientTask(task) });
     }
     if (id && method === 'DELETE') {
       await db.batch([
