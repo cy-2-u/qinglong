@@ -198,24 +198,34 @@
   }
 
   // ---------- 自绘浮层提示（替代浏览器原生 title tooltip） ----------
+  // 跟随鼠标坐标定位（元素矩形在 30s 静默刷新重渲染时会失效，不可依赖）
   var qtipEl = null;
+  var qtipTarget = null;
   function hideQtip() {
-    if (qtipEl) { if (qtipEl.remove) qtipEl.remove(); qtipEl = null; }
+    if (qtipEl) { if (qtipEl.remove) qtipEl.remove(); qtipEl = null; qtipTarget = null; }
   }
-  function showQtip(target) {
+  function positionQtip(ev) {
+    if (!qtipEl) return;
+    var x = ev.clientX + 14, y = ev.clientY + 16;
+    var w = qtipEl.offsetWidth, h = qtipEl.offsetHeight;
+    if (x + w > window.innerWidth - 8) x = ev.clientX - w - 12;
+    if (y + h > window.innerHeight - 8) y = ev.clientY - h - 12;
+    if (x < 8) x = 8;
+    if (y < 8) y = 8;
+    qtipEl.style.left = x + 'px';
+    qtipEl.style.top = y + 'px';
+  }
+  function showQtip(target, ev) {
+    if (qtipTarget === target && qtipEl) { positionQtip(ev); return; }
     hideQtip();
     var text = target.getAttribute('data-tip');
     if (!text) return;
+    qtipTarget = target;
     qtipEl = document.createElement('div');
     qtipEl.className = 'qtip';
     qtipEl.textContent = text;
     document.body.appendChild(qtipEl);
-    var r = target.getBoundingClientRect();
-    var left = clamp(r.left + r.width / 2 - qtipEl.offsetWidth / 2, 8, window.innerWidth - qtipEl.offsetWidth - 8);
-    var top = r.top - qtipEl.offsetHeight - 7;
-    if (top < 8) top = r.bottom + 7;
-    qtipEl.style.left = left + 'px';
-    qtipEl.style.top = top + 'px';
+    positionQtip(ev);
   }
 
   function mergeBuiltinParams() {
@@ -307,7 +317,6 @@
         ? '      <select id="fBuiltin" class="freq-hour">' + builtinOpts + '</select>'
         : '      <span class="muted">' + esc((builtinByKey(e.script_key) || {}).name || e.script_key || '未知') + '</span>') +
       '    </div>' +
-      '    <div class="hint">脚本在仓库 src/tasks/ 维护，push 自动部署，面板只读。</div>' +
       '  </div>' +
 
       // 底部操作
@@ -706,7 +715,7 @@
     // 自绘浮层提示：悬停带 data-tip 的元素时显示，移开/滚动/按下即隐藏
     document.addEventListener('mouseover', function (ev) {
       var t = ev.target.closest ? ev.target.closest('[data-tip]') : null;
-      if (t) showQtip(t); else hideQtip();
+      if (t) showQtip(t, ev); else hideQtip();
     });
     document.addEventListener('mousedown', hideQtip);
     window.addEventListener('scroll', hideQtip, true);

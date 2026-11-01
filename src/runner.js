@@ -2,13 +2,26 @@
 // 注意：Workers 运行时禁止字符串编译（new Function/eval），脚本一律来自打包的内置库模块。
 import { ensureReady } from './seed.js';
 import { getMeowNickname, meowPush } from './notify.js';
-import { advanceNext, tzOffsetSec } from './nextrun.js';
+import { advanceNext, nextDailyAnchor, nextMonthlyAnchor, tzOffsetSec } from './nextrun.js';
 import { BUILTINS } from './builtins.js';
 
 const TASK_TIMEOUT_MS = 90_000;   // 单任务墙钟保险丝
 const FETCH_TIMEOUT_MS = 30_000;  // ctx.fetch 单请求保险丝
 const MAX_LOG_LINES = 200;        // 每任务日志环形上限
 const MAX_NOTIFY = 10;            // 单次运行推送上限（防脚本失控刷通知）
+
+// 下一个调度槽位：天/月的单次（N=1）任务完全由时刻规则决定——
+// 手动运行推走的漂移会在下一次计算时自愈；其余沿用锚点推进
+function computeNext(task, prevAnchor, nowSec, tz) {
+  const n = Math.max(1, task.interval_amount | 0);
+  if (n === 1 && task.interval_unit === 'd') {
+    return nextDailyAnchor(task.run_hour == null ? 9 : task.run_hour, nowSec, tz);
+  }
+  if (n === 1 && task.interval_unit === 'm') {
+    return nextMonthlyAnchor(task.run_day == null ? 1 : task.run_day, task.run_hour == null ? 9 : task.run_hour, nowSec, tz);
+  }
+  return advanceNext(task, prevAnchor, nowSec, tz);
+}
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -39,7 +52,7 @@ async function flushLogs(db, taskId, logs) {
   await db.batch(stmts);
 }
 
-async function runOne(env, task) {
+async function runOne(env, task, isManual) {
   const db = env.DB;
   const nowSec = () => Math.floor(Date.now() / 1000);
   const logs = [];
@@ -90,35 +103,55 @@ async function runOne(env, task) {
   const finishedAt = nowSec();
   pushLog('info', '执行结束: ' + (status === 'ok' ? '成功' : '失败') + '，用时 ' + (finishedAt - startedAt) + 's');
 
-  const next = advanceNext(task, task.next_run_at, finishedAt, tzOffsetSec(env));
   await flushLogs(db, task.id, logs);
-  await db.prepare('UPDATE tasks SET last_run_at=?, last_status=?, next_run_at=? WHERE id=?')
-    .bind(finishedAt, status, next, task.id).run();
+  if (isManual) {
+    // 手动运行不打乱调度节奏：只记录结果，不推进 next_run_at
+    await db.prepare('UPDATE tasks SET last_run_at=?, last_status=? WHERE id=?')
+      .bind(finishedAt, status, task.id).run();
+  } else {
+    const next = computeNext(task, task.next_run_at, finishedAt, tzOffsetSec(env));
+    await db.prepare('UPDATE tasks SET last_run_at=?, last_status=?, next_run_at=? WHERE id=?')
+      .bind(finishedAt, status, next, task.id).run();
+  }
   return status;
 }
 
 // 心跳：执行所有到期任务
 export async function heartbeat(env) {
   await ensureReady(env);
+  const now = Math.floor(Date.now() / 1000);
+  const tz = tzOffsetSec(env);
   // 崩溃恢复：心跳与手动运行共用单飞锁（严格串行），走到这里时不可能有运行中的
   // 任务；仍是 running 状态的是上次 isolate 崩溃/被逐出的残留。重置为 failed，
   // 其 next_run_at 早已过期，本轮会立即补跑。
   await env.DB.prepare("UPDATE tasks SET last_status='failed' WHERE last_status='running'").run();
-  const now = Math.floor(Date.now() / 1000);
+  // 漂移自愈：天/月的单次任务，下一次运行时刻完全由规则决定——把历史上被
+  // 手动运行推走的 next_run_at 拉回正确槽位（跳过已到期待跑/运行中/停用的任务）
+  const { results: anchored } = await env.DB.prepare(
+    "SELECT id, interval_unit, run_hour, run_day, next_run_at FROM tasks WHERE enabled=1 AND interval_amount=1 AND interval_unit IN ('d','m') AND last_status<>'running'"
+  ).all();
+  for (const t of anchored || []) {
+    if (!(t.next_run_at > now)) continue; // 已到期待跑的交给下面的执行流程
+    const correct = t.interval_unit === 'd'
+      ? nextDailyAnchor(t.run_hour == null ? 9 : t.run_hour, now, tz)
+      : nextMonthlyAnchor(t.run_day == null ? 1 : t.run_day, t.run_hour == null ? 9 : t.run_hour, now, tz);
+    if (t.next_run_at !== correct) {
+      await env.DB.prepare('UPDATE tasks SET next_run_at=? WHERE id=?').bind(correct, t.id).run();
+    }
+  }
   const { results } = await env.DB.prepare(
     "SELECT * FROM tasks WHERE enabled=1 AND next_run_at<=? AND last_status<>'running' ORDER BY next_run_at"
   ).bind(now).all();
   let ran = 0;
   for (const task of results || []) {
     await env.DB.prepare("UPDATE tasks SET last_status='running' WHERE id=?").bind(task.id).run();
-    await runOne(env, Object.assign({}, task, { last_status: 'running' }));
+    await runOne(env, Object.assign({}, task, { last_status: 'running' }), false);
     ran += 1;
   }
   return ran;
 }
 
-// 手动运行单个任务（不推进 next_run_at 以外的节奏；runOne 内部会正常推进锚点，
-// 与"手动运行不打乱节奏"的语义一致：锚点基于旧 next_run_at 计算）
+// 手动运行单个任务：只记录结果，绝不改变 next_run_at（不打乱调度节奏）
 export async function runTaskById(env, id) {
   await ensureReady(env);
   const task = await env.DB.prepare('SELECT * FROM tasks WHERE id=?').bind(Number(id)).first();
@@ -126,5 +159,5 @@ export async function runTaskById(env, id) {
   if (task.last_status === 'running') return 'running';
   if (!task.enabled) throw new Error('任务已停用，请先启用');
   await env.DB.prepare("UPDATE tasks SET last_status='running' WHERE id=?").bind(task.id).run();
-  return runOne(env, Object.assign({}, task, { last_status: 'running' }));
+  return runOne(env, Object.assign({}, task, { last_status: 'running' }), true);
 }
