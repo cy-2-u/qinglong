@@ -1,13 +1,16 @@
 /* 后端适配层：统一 UI 与后端之间的接口。
  * - 同源存在 /api/health（正式 Workers 后端）时走 live 模式（fetch /api/*）
  * - 否则自动落入 mock 模式（window.MockAPI，localStorage 演示数据）
- * UI 只依赖 window.API，不感知背后是哪一个。 */
+ * UI 只依赖 window.API，不感知背后是哪一个。
+ * 注意：http(s) 部署必定带后端，探测失败会重试而不是降级——
+ * 静默降级会让整个面板悄悄换成假数据（曾因此出过线上 bug）。 */
 (function () {
   'use strict';
 
   var mode = 'mock';            // 'live' | 'mock'
   var ready = false;
   var readyCbs = [];
+  var readyPromise = null;
 
   function notifyReady() {
     if (ready) return;
@@ -15,18 +18,35 @@
     readyCbs.forEach(function (cb) { try { cb(mode); } catch (e) { /* 忽略 */ } });
   }
 
-  // 探测真实后端。file:// 或无后端时 fetch 会失败/404，保持 mock。
-  (function probe() {
-    var done = false;
-    function settle(m) { if (!done) { done = true; mode = m; notifyReady(); } }
-    // 兜底：800ms 内没有结果就按 mock 处理
-    setTimeout(function () { settle(mode); }, 800);
-    try {
-      fetch('/api/health', { method: 'GET' })
-        .then(function (r) { settle(r.ok ? 'live' : 'mock'); })
-        .catch(function () { settle('mock'); });
-    } catch (e) { settle('mock'); }
-  })();
+  function settle(m) {
+    mode = m;
+    notifyReady();
+    return m;
+  }
+
+  function initMode() {
+    if (readyPromise) return readyPromise;
+    // file:// 没有后端可言：直接演示模式
+    if (location.protocol === 'file:') {
+      readyPromise = Promise.resolve(settle('mock'));
+      return readyPromise;
+    }
+    // http(s) 部署一定带后端：探测失败重试，只有彻底确认后端不存在才算 mock
+    var attempts = 0;
+    function attempt() {
+      attempts++;
+      return fetch('/api/health', { method: 'GET' }).then(function (r) {
+        return r.ok ? 'live' : 'mock';
+      }).catch(function () {
+        if (attempts < 3) {
+          return new Promise(function (res) { setTimeout(res, 600); }).then(attempt);
+        }
+        return 'mock';
+      });
+    }
+    readyPromise = attempt().then(settle);
+    return readyPromise;
+  }
 
   function backend() { return mode === 'live' ? LiveAPI : window.MockAPI; }
 
@@ -64,6 +84,7 @@
   // ---------- 对外接口 ----------
   window.API = {
     get mode() { return mode; },
+    ready: function () { return initMode(); },
     onReady: function (cb) {
       if (ready) cb(mode); else readyCbs.push(cb);
     },

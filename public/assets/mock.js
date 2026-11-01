@@ -63,20 +63,6 @@
         last_run_at: monthlyAt(1, 9, false),
         last_status: 'ok',
         next_run_at: monthlyAt(1, 9, true)
-      },
-      {
-        id: 3,
-        name: '示例 · 每 12 小时心跳测试',
-        enabled: 0,
-        interval_amount: 12,
-        interval_unit: 'h',
-        run_hour: null,
-        run_day: null,
-        params: { env: 'demo' },
-        script_key: 'heartbeat-demo',
-        last_run_at: null,
-        last_status: 'never',
-        next_run_at: nowSec() + 12 * 3600
       }
     ];
 

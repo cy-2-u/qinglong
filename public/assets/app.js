@@ -749,11 +749,14 @@
     });
     API.onReady(function () { syncModeBadge(); });
 
-    if (App.authed) {
-      enterPanel();
-    } else {
-      renderLogin();
-    }
+    // 先等模式探测出结果（live/mock）再渲染界面——杜绝探测窗口期的误判
+    API.ready().then(function () {
+      if (App.authed) {
+        enterPanel();
+      } else {
+        renderLogin();
+      }
+    });
 
     setInterval(function () {
       if (!App.authed || App.view !== 'list' || $('.overlay')) return;
