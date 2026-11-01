@@ -55,6 +55,19 @@ foreach ($f in $files) {
   $content = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
   $entries += [PSCustomObject]@{ path = $rel; mode = '100644'; type = 'blob'; content = $content }
 }
+
+# paths listed in delete-list.txt are removed from the repo (sha=null deletes the entry)
+$deleteListFile = Join-Path $PSScriptRoot 'delete-list.txt'
+if (Test-Path $deleteListFile) {
+  Get-Content $deleteListFile -Encoding UTF8 | ForEach-Object {
+    $p = $_.Trim()
+    if ($p -and -not $p.StartsWith('#')) {
+      $entries += [PSCustomObject]@{ path = $p.Replace('\', '/'); mode = '100644'; type = 'blob'; sha = $null }
+      Write-Output ("DELETE_REMOTE: " + $p)
+    }
+  }
+}
+
 $treeObj = @{ base_tree = $baseTree; tree = $entries }
 $treeBody = $treeObj | ConvertTo-Json -Depth 4
 $jsonTree = Join-Path $env:TEMP 'ql_tree.json'
@@ -67,7 +80,11 @@ Write-Output "TREE: $treeSha"
 
 $msgFile = Join-Path $PSScriptRoot 'commit-msg.txt'
 $msg = [System.IO.File]::ReadAllText($msgFile, [System.Text.Encoding]::UTF8)
-$commitSha = gh api "repos/$full/git/commits" -f message=$msg -f tree=$treeSha -f "parents[]=$headSha" --jq '.sha' 2>$null
+# commit body via --input JSON: multiline -f args get mangled by PS 5.1 native arg passing
+$commitBody = @{ message = $msg; tree = $treeSha; parents = @($headSha) } | ConvertTo-Json
+$jsonCommit = Join-Path $env:TEMP 'ql_commit.json'
+[System.IO.File]::WriteAllText($jsonCommit, $commitBody, (New-Object System.Text.UTF8Encoding($false)))
+$commitSha = gh api "repos/$full/git/commits" --input $jsonCommit --jq '.sha' 2>$null
 if ($LASTEXITCODE -ne 0 -or -not $commitSha) { Write-Output 'COMMIT_FAIL'; exit 1 }
 Write-Output "COMMIT: $commitSha"
 

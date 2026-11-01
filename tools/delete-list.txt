@@ -1,0 +1,8 @@
+# upload.ps1 上传时从 GitHub 仓库删除的路径（每行一个，# 开头为注释行）
+# 本轮架构清理：搭建期的一次性脚本，功能已完成，本地也已删除
+tools/prep.ps1
+tools/findgit.ps1
+tools/cleanup.ps1
+tools/verify-repo.ps1
+tools/ci-log.ps1
+tools/ci-log2.ps1

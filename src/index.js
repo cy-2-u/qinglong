@@ -86,10 +86,13 @@ function normalizeTask(body) {
   const script = String(body.script_code || '');
   if (!name) throw new HttpError('名称不能为空');
   if (!script.trim()) throw new HttpError('脚本不能为空');
+  if (script.length > 262144) throw new HttpError('脚本过大（上限 256KB）');
+  const params = JSON.stringify(body.params && typeof body.params === 'object' ? body.params : {});
+  if (params.length > 65536) throw new HttpError('参数过大（上限 64KB）');
   return {
     name,
     script_code: script,
-    params: JSON.stringify(body.params && typeof body.params === 'object' ? body.params : {}),
+    params: params,
     interval_unit: unit,
     interval_amount: clamp(Math.round(Number(body.interval_amount)) || 1, 1, UNIT_MAX[unit]),
     run_hour: unit === 'h' ? null : clamp(Math.round(Number(body.run_hour)) || 0, 0, 23),

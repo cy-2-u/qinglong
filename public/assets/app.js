@@ -355,6 +355,17 @@
     });
   }
 
+  // 把未保存的频率数值收进 editing——切单位/增删参数会重渲染编辑器，
+  // 不收割的话用户刚输入的数值会被旧值覆盖（丢输入）
+  function harvestSchedule() {
+    var e = App.editing;
+    if (!e) return;
+    var amountEl = $('#fAmount');
+    if (amountEl) e.amount = clamp(Math.round(+amountEl.value) || e.amount, 1, unitInfo(e.unit).max);
+    if ($('#rowHour') && !$('#rowHour').classList.contains('hidden')) e.hour = clamp(+$('#fHour').value || 0, 0, 23);
+    if ($('#rowDay') && !$('#rowDay').classList.contains('hidden')) e.day = clamp(+$('#fDay').value || 1, 1, 28);
+  }
+
   function syncUnitFields() {
     var e = App.editing;
     var info = unitInfo(e.unit);
@@ -584,8 +595,7 @@
     await API.deleteTask(id);
     toast('已删除', 'ok');
     await loadTasks();
-    if (App.view === 'editor') renderList();
-    else renderList();
+    renderList();
   }
 
   async function actionSave() {
@@ -637,17 +647,20 @@
     switch (action) {
       case 'unit':
         if (App.view === 'editor') {
+          harvestSchedule();
           App.editing.unit = el.dataset.unit;
           harvestParams();
           renderEditor();
         }
         break;
       case 'add-param':
+        harvestSchedule();
         harvestParams();
         App.editing.params.push({ k: '', v: '' });
         renderEditor();
         break;
       case 'del-param': {
+        harvestSchedule();
         harvestParams();
         var row = el.closest('.param-row');
         App.editing.params.splice(+row.dataset.idx, 1);

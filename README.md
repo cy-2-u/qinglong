@@ -32,16 +32,22 @@ qinglong/
 ├── src/
 │   ├── index.js            # Worker：API 路由 + 鉴权 + cron 看门狗
 │   ├── scheduler.js        # TaskScheduler DO：小时心跳 + 单飞锁
-│   ├── runner.js           # 脚本执行器：编译/ctx 注入/限时/日志落库
+│   ├── runner.js           # 脚本执行器：编译缓存/ctx 注入/限时/崩溃恢复/日志落库
 │   ├── nextrun.js          # 北京时间锚定的 next_run_at 计算
 │   ├── notify.js           # MeoW 全局推送（api.chuckfang.com）
-│   ├── seed.js             # D1 建表 + 内置脚本播种
+│   ├── seed.js             # D1 建表 + 内置脚本播种（原子认领防竞态）
 │   ├── coordinator.js      # 单飞协调器（移植自 UptimeFlare）
 │   └── scripts/
-│       ├── glados-checkin.txt   # 内置脚本：GLaDOS 签到（完整移植）
-│       └── dnshe-renew.txt      # 内置脚本：DNSHE 续期（骨架，移植中）
+│       ├── glados-checkin.txt   # 内置脚本：GLaDOS 签到（完整移植，≥500 分自动兑换）
+│       └── dnshe-renew.txt      # 内置脚本：DNSHE 域名续期（完整移植）
 ├── reference/              # 移植参考（GLaDOS / DNSHE 原脚本、UptimeFlare 调度源码）
-├── tools/                  # 本地静态服务、冒烟检查、调度数学单元测试
+├── tools/
+│   ├── smoke.ps1           # 回归入口：21 个测试 + 全部语法检查
+│   ├── test-nextrun.mjs / test-dnshe.mjs / test-glados.mjs
+│   ├── cpu-bench.mjs       # 纯 JS CPU 基准（对账 Workers 10ms 预算）
+│   ├── live-run.mjs / run-live.ps1   # 真实凭据试跑（凭据走环境变量，不入库）
+│   ├── serve.mjs           # 面板本地静态预览（演示模式）
+│   └── upload.ps1          # 无 git 环境的增量推送（delete-list.txt 声明远程删除项）
 ├── wrangler.toml
 └── .github/workflows/deploy.yml
 ```

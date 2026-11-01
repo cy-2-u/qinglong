@@ -55,18 +55,24 @@ export async function ensureReady(env) {
 
   const seeded = await db.prepare("SELECT value FROM settings WHERE key='seeded'").first();
   if (!seeded) {
-    const cnt = await db.prepare('SELECT COUNT(*) AS c FROM tasks').first();
-    if (!cnt || cnt.c === 0) {
-      const now = Math.floor(Date.now() / 1000);
-      const tz = tzOffsetSec(env);
-      for (const t of BUILTINS) {
-        const next = initialNext(t, now, tz);
-        await db.prepare(
-          'INSERT INTO tasks (name, enabled, script_code, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?)'
-        ).bind(t.name, 1, t.script_code, JSON.stringify(t.params), t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
+    // 原子认领播种权：部署后并发冷启动的多个 isolate 都会走到这里，
+    // INSERT OR IGNORE 只有一个能写入成功（meta.changes===1），避免内置脚本被重复播种
+    const claim = await db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('seeded','1') ON CONFLICT(key) DO NOTHING"
+    ).run();
+    if (claim.meta.changes === 1) {
+      const cnt = await db.prepare('SELECT COUNT(*) AS c FROM tasks').first();
+      if (!cnt || cnt.c === 0) {
+        const now = Math.floor(Date.now() / 1000);
+        const tz = tzOffsetSec(env);
+        for (const t of BUILTINS) {
+          const next = initialNext(t, now, tz);
+          await db.prepare(
+            'INSERT INTO tasks (name, enabled, script_code, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?)'
+          ).bind(t.name, 1, t.script_code, JSON.stringify(t.params), t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
+        }
       }
     }
-    await db.prepare("INSERT INTO settings (key, value) VALUES ('seeded','1') ON CONFLICT(key) DO NOTHING").run();
   }
   ready = true;
 }

@@ -1,11 +1,28 @@
-chore: live-run + cpu-bench tooling (credential-free)
+refactor: full architecture audit - fixes, hardening, cleanup
 
-- tools/live-run.mjs: run a builtin script against real APIs with CPU
-  metering; params via env/file only, never committed
-- tools/cpu-bench.mjs: pure-JS CPU benchmark with in-process mock fetch
-  (TLS/DNS excluded, matching Workers isolate accounting). Results:
-  GLaDOS 0.10-0.16 ms/run, 3-account worst 0.16 ms; DNSHE 10 domains
-  0.31 ms, 30 domains 0.47 ms; combined worst-case ~0.63 ms vs 10 ms
-  free-plan budget (per DO alarm invocation, serial heartbeat)
-- verified live: GLaDOS real checkin OK (+7 pts, no exchange below 500);
-  DNSHE failure path OK end-to-end (invalid secret -> code + hint + fail push)
+Backend fixes (real bugs found by the audit):
+- scheduler: alarm() used RunCoordinator.run() which JOINS an in-flight
+  manual run, silently skipping that heartbeat and its alarm re-arm;
+  switched to mutate() so heartbeats queue after manual runs
+- runner: crash recovery - a task stuck in last_status='running' after
+  isolate eviction was skipped forever; heartbeat now reclaims stale
+  running rows (safe: all runs serialize through the single DO)
+- runner: compile cache (new Function parse skipped when script text
+  unchanged, ~1ms CPU per heartbeat saved); notify cap (10/run)
+- index: size caps for script_code (256KB) and params (64KB)
+- seed: atomic claim via INSERT OR IGNORE - concurrent cold isolates
+  no longer double-seed builtin tasks
+
+Frontend fixes:
+- editor: unit switch / param add/remove lost unsaved amount/hour/day
+  inputs (re-render used stale editing state); added harvestSchedule()
+- removed redundant branch in actionDelete
+- mock demo: dailyAt/monthlyAt seeded "last run" in the future and
+  "next run" two days out; legacy pushplus log text -> MeoW
+
+Project cleanup:
+- removed six one-off setup scripts (prep/findgit/cleanup/verify-repo/
+  ci-log x2); upload.ps1 now honors tools/delete-list.txt for remote
+  deletions; README tree refreshed
+
+Regression: 21/21 tests passing

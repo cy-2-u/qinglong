@@ -25,7 +25,10 @@ export class TaskScheduler extends DurableObject {
 
   async alarm() {
     let ran = 0;
-    await this.co.run(async () => {
+    // 用 mutate 排队而不是 run()：run() 会"加入"正在进行的手动运行（直接返回它的
+    // Promise），导致这次心跳整个被跳过、闹钟也不再续期（只能等 cron 看门狗兜底）。
+    // mutate 保证心跳排在手动运行之后完整执行。
+    await this.co.mutate(async () => {
       try {
         ran = await heartbeat(this.env);
       } catch (e) {
