@@ -7,3 +7,5 @@ tools/verify-repo.ps1
 tools/ci-log.ps1
 tools/ci-log2.ps1
 tools/debug-commit.ps1
+public/assets/mock.js
+tools/serve.mjs

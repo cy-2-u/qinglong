@@ -1,11 +1,15 @@
-feat: panel polish - custom tooltips, select arrow, no source view
+feat: remove demo mode entirely
 
-- login page no longer flashes the demo-mode hint on live: the hint
-  renders only after the backend probe confirms mock mode
-- native title tooltips replaced by a custom dark bubble (data-tip +
-  delegated mouseover, hidden on scroll/press/Esc); all buttons migrated
-- select styling: native arrow replaced with an inline SVG chevron
-  inset from the edge, consistent across browsers
-- script source preview removed entirely (read-only anyway, maintenance
-  happens in the repo); /api/builtins and mock no longer serve code
-- dead code: mock SAMPLE_* / DEFAULT_SCRIPT constants dropped
+The probe silently downgraded the panel to fake localStorage data when
+/api/health answered slowly (800ms fallback) - on the user's flaky
+route to workers.dev the live panel once rendered the entire demo
+dataset, which read as "leftover test code in production".
+
+- public/assets/mock.js and tools/serve.mjs deleted (remote via
+  delete-list)
+- api.js is now a thin live-only wrapper: no mode probe, no mock
+  branch, no resetDemo
+- app.js: demo badge, reset-demo button and boot-time mode gating
+  removed; panel renders directly (backend errors surface via toasts
+  and the 401 handler)
+- README: local preview now requires wrangler dev

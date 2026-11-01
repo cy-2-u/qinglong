@@ -92,19 +92,10 @@
       '  <form class="login-card" id="loginForm">' +
       '    <div class="win-dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>' +
       '    <h1>青龙</h1>' +
-      '    <p class="muted hidden" id="loginMode"></p>' +
       '    <input type="password" id="loginPw" placeholder="面板密码" autocomplete="current-password" required>' +
       '    <button class="btn primary block" type="submit">进入</button>' +
       '  </form>' +
       '</div>';
-    // 演示模式提示等探测完成再显示，避免线上在探测窗口期误标为演示
-    API.onReady(function () {
-      var el = $('#loginMode');
-      if (el && API.mode === 'mock') {
-        el.textContent = '演示模式 · 任意密码';
-        el.classList.remove('hidden');
-      }
-    });
     $('#loginPw').focus();
   }
 
@@ -114,24 +105,13 @@
       '<header class="topbar">' +
       '  <div class="brand">青龙</div>' +
       '  <div class="top-actions">' +
-      '    <span class="mode-badge" id="modeBadge"></span>' +
-      '    <button class="btn ghost icon-btn" id="btnReset" data-action="reset-demo" data-tip="重置演示数据">' + ICONS.refresh + '</button>' +
       '    <button class="btn ghost icon-btn" data-action="settings" data-tip="通知设置">' + ICONS.gear + '</button>' +
       '    <button class="btn ghost icon-btn" id="btnTheme" data-action="toggle-theme" data-tip="切换主题"></button>' +
       '    <button class="btn ghost" data-action="logout">退出</button>' +
       '  </div>' +
       '</header>' +
       '<main class="container" id="main"></main>';
-    syncModeBadge();
     syncThemeIcon();
-  }
-
-  function syncModeBadge() {
-    var badge = $('#modeBadge'), resetBtn = $('#btnReset');
-    if (!badge) return;
-    var isMock = API.mode === 'mock';
-    badge.textContent = isMock ? '演示模式' : '已连接';
-    if (resetBtn) resetBtn.classList.toggle('hidden', !isMock);
   }
 
   function syncThemeIcon() {
@@ -162,8 +142,6 @@
       '    <button class="btn primary" data-action="new-task">' + ICONS.plus + ' 新建任务</button>' +
       '  </div>' +
       '</div>' + cards;
-
-    syncModeBadge();
   }
 
   function taskCard(t) {
@@ -641,13 +619,6 @@
         syncThemeIcon();
         break;
 
-      case 'reset-demo':
-        API.resetDemo().then(function () { return loadTasks(); }).then(function () {
-          toast('演示数据已重置', 'ok');
-          if (App.view === 'list') renderList();
-        });
-        break;
-
       case 'close-modal': closeModal(false); break;
       case 'refresh-logs': fillLogs(id); break;
       case 'confirm-yes': closeModal(true); break;
@@ -747,16 +718,12 @@
       renderLogin();
       toast('登录已过期，请重新输入密码', 'fail');
     });
-    API.onReady(function () { syncModeBadge(); });
-
-    // 先等模式探测出结果（live/mock）再渲染界面——杜绝探测窗口期的误判
-    API.ready().then(function () {
-      if (App.authed) {
-        enterPanel();
-      } else {
-        renderLogin();
-      }
-    });
+    // 未登录先渲染登录页；已登录直接进入面板（数据加载失败由各调用方提示）
+    if (App.authed) {
+      enterPanel();
+    } else {
+      renderLogin();
+    }
 
     setInterval(function () {
       if (!App.authed || App.view !== 'list' || $('.overlay')) return;

@@ -13,14 +13,14 @@ if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: dnshe'; exit 1 }
 node (Join-Path $PSScriptRoot 'test-glados.mjs')
 if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: glados'; exit 1 }
 
-# 2) panel scripts (plain check)
-$panel = @('app.js', 'api.js', 'mock.js')
-foreach ($f in $panel) {
-  $p = Join-Path $root 'public\assets'
-  $p = Join-Path $p $f
-  node --check $p
-  if ($LASTEXITCODE -ne 0) { Write-Output "SYNTAX_FAIL: $f"; exit 1 }
-}
+  # 2) panel scripts (plain check)
+  $panel = @('app.js', 'api.js')
+  foreach ($f in $panel) {
+    $p = Join-Path $root 'public\assets'
+    $p = Join-Path $p $f
+    node --check $p
+    if ($LASTEXITCODE -ne 0) { Write-Output "SYNTAX_FAIL: $f"; exit 1 }
+  }
 
 # 3) backend ESM -> copy as .mjs then check
 $esm = @('index.js', 'runner.js', 'scheduler.js', 'seed.js', 'nextrun.js', 'notify.js', 'coordinator.js')

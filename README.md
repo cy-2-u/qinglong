@@ -28,7 +28,7 @@ cron 与 /health 只负责 `ensureAlarm()`，真调度是 DO alarm 自续期；�
 qinglong/
 ├── public/                 # 面板（纯静态，零依赖）
 │   ├── index.html
-│   └── assets/  style.css / app.js / api.js / mock.js
+│   └── assets/  style.css / app.js / api.js
 ├── src/
 │   ├── index.js            # Worker：API 路由 + 鉴权 + cron 看门狗 + /api/builtins
 │   ├── scheduler.js        # TaskScheduler DO：小时心跳 + 单飞锁
@@ -48,7 +48,6 @@ qinglong/
 │   ├── cpu-bench.mjs       # 纯 JS CPU 基准（对账 Workers 10ms 预算）
 │   ├── live-run.mjs / run-live.ps1   # 真实凭据试跑（凭据走环境变量，不入库）
 │   ├── ci-log.ps1          # 拉取 Actions 运行日志排错
-│   ├── serve.mjs           # 面板本地静态预览（演示模式）
 │   └── upload.ps1          # 无 git 环境的增量推送（delete-list.txt 声明远程删除项）
 ├── wrangler.toml
 └── .github/workflows/deploy.yml
@@ -75,16 +74,15 @@ CI 流程（`.github/workflows/deploy.yml`）：
 
 本地手动部署（可选）：`npx wrangler login && npx wrangler deploy`；
 本地开发 `npx wrangler dev`（D1/DO 均为本地模拟，占位符 ID 可直接用）。
+面板必须连接后端才能工作（演示模式已移除），本地调样式一律走 `wrangler dev`。
 
 ## 本地开发
 
 ```powershell
 npm install
-copy .dev.vars.example .dev.vars   # 已预置演示密码 dev123456
+copy .dev.vars.example .dev.vars   # 已预置本地开发密码 dev123456
 npx wrangler dev                   # 本地完整跑（DO/D1 均为本地模拟）
 ```
-
-只调面板样式时不用起 Worker：`node tools/serve.mjs` 后访问 http://127.0.0.1:8137/（演示模式，数据存 localStorage）。
 
 回归检查：`powershell -ExecutionPolicy Bypass -File tools\smoke.ps1`
 （含调度数学 12 个单元测试、DNSHE 移植 6 个 mock 端到端测试 + 全部 JS 语法检查。）

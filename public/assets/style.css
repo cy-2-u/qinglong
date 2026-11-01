@@ -125,15 +125,6 @@ select {
   letter-spacing: 0.04em;
 }
 .top-actions { display: flex; align-items: center; gap: 6px; }
-.mode-badge {
-  font-size: 12px;
-  color: var(--muted);
-  border: 1px solid var(--hairline);
-  background: var(--panel);
-  border-radius: 99px;
-  padding: 3px 11px;
-  margin-right: 5px;
-}
 
 /* ============ 布局 ============ */
 .container { max-width: 960px; margin: 0 auto; padding: 28px 24px 80px; }
