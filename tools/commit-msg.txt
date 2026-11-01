@@ -1,12 +1,16 @@
-fix: cursor-anchored tooltips, drop script hint, real schedule semantics
+fix: real dark mode + qtip styles that never shipped
 
-- qtip now follows the mouse cursor (element-rect positioning broke when
-  the 30s silent refresh re-rendered the list and zeroed the rect)
-- script section hint line removed per feedback
-- schedule semantics fix exposed by the live panel: manual runs advanced
-  next_run_at by one period each ("next" drifted to +4 days after a few
-  manual triggers), stealing upcoming scheduled slots
-  - manual runs now only record result, never touch next_run_at
-  - daily/monthly single-period tasks recompute next from the rule
-    (self-healing); heartbeat re-anchors drifted future slots (skipping
-    due/running/disabled ones)
+Dark mode:
+- dark class lived on <body> but the CSS vars are defined at :root;
+  custom properties don't inherit upwards, so the html canvas kept the
+  light cream background and short pages showed a light bottom half.
+  Class moved to documentElement, selectors body.dark -> html.dark
+
+Tooltips:
+- the .qtip stylesheet block was silently lost in a failed find/replace
+  last round - tooltips rendered as unstyled text appended at the end
+  of the document (bottom-left). Styles added (light + dark variants)
+
+Cache:
+- index.html now references assets with ?v= version param so deploys
+  reach browsers without hard refresh

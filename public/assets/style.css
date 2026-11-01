@@ -32,7 +32,7 @@
   --mono: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
 }
 
-body.dark {
+html.dark {
   --bg: #262624;
   --panel: #302f2c;
   --panel2: #3a3935;
@@ -232,10 +232,10 @@ select {
 .chip-fail  { color: var(--fail); background: rgba(192, 57, 43, 0.11); }
 .chip-run   { color: var(--run);  background: rgba(74, 125, 181, 0.13); }
 .chip-idle  { color: var(--muted); background: rgba(138, 133, 116, 0.12); }
-body.dark .chip-ok    { background: rgba(79, 174, 125, 0.16); }
-body.dark .chip-fail  { background: rgba(224, 106, 92, 0.16); }
-body.dark .chip-run   { background: rgba(111, 159, 212, 0.16); }
-body.dark .chip-idle  { background: rgba(165, 161, 145, 0.14); }
+html.dark .chip-ok    { background: rgba(79, 174, 125, 0.16); }
+html.dark .chip-fail  { background: rgba(224, 106, 92, 0.16); }
+html.dark .chip-run   { background: rgba(111, 159, 212, 0.16); }
+html.dark .chip-idle  { background: rgba(165, 161, 145, 0.14); }
 
 /* ============ 按钮 ============ */
 .btn {
@@ -483,7 +483,7 @@ body.dark .chip-idle  { background: rgba(165, 161, 145, 0.14); }
   padding: 24px;
   animation: fade-in 0.18s ease-out;
 }
-body.dark .overlay { background: rgba(0, 0, 0, 0.45); }
+html.dark .overlay { background: rgba(0, 0, 0, 0.45); }
 .modal {
   width: min(760px, 100%);
   max-height: 82vh;
@@ -566,6 +566,24 @@ body.dark .overlay { background: rgba(0, 0, 0, 0.45); }
 
 .modal-hint { font-size: 12px; color: var(--muted); margin-top: 9px; }
 
+/* 自绘浮层提示（data-tip，替代浏览器原生 title tooltip） */
+.qtip {
+  position: fixed;
+  z-index: 200;
+  max-width: 260px;
+  background: #35322a;
+  color: #f0eee6;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: 8px;
+  padding: 6px 11px;
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: fade-in 0.12s ease-out;
+}
+html.dark .qtip { background: #55534d; }
+
 /* ============ 滚动条 ============ */
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-thumb {
@@ -576,3 +594,4 @@ body.dark .overlay { background: rgba(0, 0, 0, 0.45); }
 }
 ::-webkit-scrollbar-thumb:hover { background-color: rgba(138, 133, 116, 0.55); }
 ::-webkit-scrollbar-track { background: transparent; }
+

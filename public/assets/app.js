@@ -696,7 +696,9 @@
 
   // ---------- 入口 ----------
   function applyTheme() {
-    document.body.classList.toggle('dark', App.theme === 'dark');
+    // dark 类挂在 html 上：CSS 变量在 :root 重定义后连画布底色一起换
+    //（挂 body 上时 html 底色不变，页面内容短就会露出米白）
+    document.documentElement.classList.toggle('dark', App.theme === 'dark');
   }
 
   async function enterPanel() {
