@@ -448,17 +448,19 @@ body.dark .chip-idle  { background: rgba(165, 161, 145, 0.14); }
   .task-stats { grid-template-columns: 1fr; gap: 8px; }
 }
 
-.script-box {
-  width: 100%;
-  min-height: 330px;
+.script-view {
+  margin: 0;
+  max-height: 340px;
+  overflow: auto;
   font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.7;
-  tab-size: 2;
-  white-space: pre;
+  font-size: 12.5px;
+  line-height: 1.65;
+  background: var(--input);
+  border: 1px solid var(--border);
   border-radius: 11px;
+  padding: 12px 14px;
+  white-space: pre;
 }
-.script-box::placeholder { color: var(--muted); }
 
 /* ============ 登录页 ============ */
 .login-wrap {
@@ -590,21 +592,6 @@ body.dark .overlay { background: rgba(0, 0, 0, 0.45); }
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
 }
 
-/* ============ 导入 ============ */
-.import-file-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-#importFileTip { font-size: 12.5px; }
-.import-box { min-height: 230px; }
-.import-box.dragover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 3.5px var(--accent-soft);
-}
 .modal-hint { font-size: 12px; color: var(--muted); margin-top: 9px; }
 
 /* ============ 滚动条 ============ */

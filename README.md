@@ -30,22 +30,24 @@ qinglong/
 │   ├── index.html
 │   └── assets/  style.css / app.js / api.js / mock.js
 ├── src/
-│   ├── index.js            # Worker：API 路由 + 鉴权 + cron 看门狗
+│   ├── index.js            # Worker：API 路由 + 鉴权 + cron 看门狗 + /api/builtins
 │   ├── scheduler.js        # TaskScheduler DO：小时心跳 + 单飞锁
-│   ├── runner.js           # 脚本执行器：编译缓存/ctx 注入/限时/崩溃恢复/日志落库
+│   ├── runner.js           # 执行器：内置库直调 / ctx 注入 / 限时 / 崩溃恢复 / 日志落库
+│   ├── builtins.js         # 内置任务库注册表（key -> {name, params, run}）
+│   ├── tasks/
+│   │   ├── glados-checkin.js   # GLaDOS 签到（≥500 分自动兑换）
+│   │   └── dnshe-renew.js      # DNSHE 域名续期
 │   ├── nextrun.js          # 北京时间锚定的 next_run_at 计算
 │   ├── notify.js           # MeoW 全局推送（api.chuckfang.com）
-│   ├── seed.js             # D1 建表 + 内置脚本播种（原子认领防竞态）
-│   ├── coordinator.js      # 单飞协调器（移植自 UptimeFlare）
-│   └── scripts/
-│       ├── glados-checkin.txt   # 内置脚本：GLaDOS 签到（完整移植，≥500 分自动兑换）
-│       └── dnshe-renew.txt      # 内置脚本：DNSHE 域名续期（完整移植）
+│   ├── seed.js             # D1 建表/迁移 + 内置任务播种（原子认领防竞态）
+│   └── coordinator.js      # 单飞协调器（移植自 UptimeFlare）
 ├── reference/              # 移植参考（GLaDOS / DNSHE 原脚本、UptimeFlare 调度源码）
 ├── tools/
 │   ├── smoke.ps1           # 回归入口：21 个测试 + 全部语法检查
 │   ├── test-nextrun.mjs / test-dnshe.mjs / test-glados.mjs
 │   ├── cpu-bench.mjs       # 纯 JS CPU 基准（对账 Workers 10ms 预算）
 │   ├── live-run.mjs / run-live.ps1   # 真实凭据试跑（凭据走环境变量，不入库）
+│   ├── ci-log.ps1          # 拉取 Actions 运行日志排错
 │   ├── serve.mjs           # 面板本地静态预览（演示模式）
 │   └── upload.ps1          # 无 git 环境的增量推送（delete-list.txt 声明远程删除项）
 ├── wrangler.toml
@@ -87,10 +89,14 @@ npx wrangler dev                   # 本地完整跑（DO/D1 均为本地模拟�
 回归检查：`powershell -ExecutionPolicy Bypass -File tools\smoke.ps1`
 （含调度数学 12 个单元测试、DNSHE 移植 6 个 mock 端到端测试 + 全部 JS 语法检查。）
 
-## 脚本契约
+## 脚本契约与内置任务库
+
+任务脚本以 **ES 模块**形式放在 `src/tasks/` 并在 `src/builtins.js` 注册，随构建打包后原生执行。
+面板不存脚本文本——因为 **Workers 运行时禁止字符串编译**（`new Function`/`eval`，平台安全模型，
+免费付费一致），这也是"面板贴任意脚本直接跑"在 Cloudflare 上做不到的原因。
 
 ```js
-async function main(ctx) {
+export async function run(ctx) {
   // ctx.params  任务的参数（键值对）
   // ctx.log(msg)                      写入运行日志
   // ctx.notify(title, content)        全局 MeoW 推送（面板里配置昵称）
@@ -99,29 +105,17 @@ async function main(ctx) {
 ```
 
 - 每任务限时 90 秒，`ctx.fetch` 单请求限时 30 秒，超时只影响本任务，不影响其他任务。
-- 日志每任务保留最近 200 行，写入即环形截断。
+- 日志每任务保留最近 200 行，写入即环形截断；单次运行推送上限 10 次。
 - 心跳每小时一次：扫 `next_run_at <= now` 的启用任务，串行执行；
   错过的补跑一次并把锚点追到未来最新一档；手动运行不打乱原节奏。
 - 时间按北京时间（`TZ_OFFSET` 变量可调，默认 +8）。
 
-### 任务头规范（AI 写脚本时贴这段）
+### 添加新脚本（三步）
 
-```js
-// ==qinglong==
-// name: GLaDOS 签到
-// unit: d        // h=小时级 / d=天级 / m=月级
-// amount: 1      // 每 N 个单位
-// hour: 9        // unit 为 d/m 时：北京时间几点（0-23）
-// day: 1         // unit 为 m 时：每月几号（1-28）
-// params: cookie // 参数名清单，值在面板里填
-// ==/qinglong==
+1. 让 AI 按上面的 ctx 契约生成 `export async function run(ctx) {...}`，存为 `src/tasks/xxx.js`；
+2. 在 `src/builtins.js` 注册一行：`'xxx': { name: '显示名', params: ['参数键'], run: xxx.run }`；
+3. push → 自动部署 → 面板新建任务时即可选到。
 
-async function main(ctx) {
-  // ...
-}
-```
-
-面板编辑器的「导入脚本」支持粘贴 / 本地文件 / 拖拽，带任务头的脚本自动填充表单。
 
 ## API 一览
 

@@ -1,6 +1,24 @@
-fix: live saveTask sent PUT /api/tasks without the id
+refactor!: builtin task library - no runtime codegen
 
-server route is PUT /api/tasks/:id; the id-less PUT fell through to the
-405 branch ("unsupported method") - exactly what the panel showed on
-save. Build the path from t.id (POST /tasks for new, PUT /tasks/:id for
-existing). All other LiveAPI methods verified against server routes.
+Runtime reality check: Workers disallow string compilation
+(new Function/eval) entirely - the panel-stored script approach crashed
+with "Code generation from strings disallowed for this context" on the
+first real run. The defensive runner captured it cleanly, but the model
+must change: scripts are now bundled ES modules executed natively.
+
+- src/tasks/*.js: GLaDOS + DNSHE as modules exporting run(ctx)
+  (content unchanged, previously .txt snapshots)
+- src/builtins.js: registry {key: {name, params, run}}
+- runner: resolves BUILTINS[task.script_key].run; compile/new Function
+  and its cache removed; unknown key -> logged failure
+- seed: script_key column + ALTER-table migration + backfill from old
+  script_code content (existing D1 tasks keep working)
+- API: POST/PUT take script_key (validated against registry);
+  GET /api/builtins serves key/name/params/code for the panel
+- panel: script section is now a builtin picker + read-only source view
+  (params auto-merge from registry); import modal / task-header tooling
+  removed (dead without runtime codegen)
+- tests/bench import the modules directly; smoke checks tasks/*.js
+- README: builtin-library workflow + why dynamic scripts are impossible
+
+Regression: 21/21 passing

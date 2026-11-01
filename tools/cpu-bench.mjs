@@ -1,20 +1,22 @@
-// 纯 JS CPU 基准：估算两个脚本在 Workers 免费版 10ms CPU 预算内的真实开销。
+// 纯 JS CPU 基准：估算两个任务在 Workers 免费版 10ms CPU 预算内的真实开销。
 // 原理：Workers 里 TLS/DNS/连接管理发生在边缘、不计入 isolate CPU；
 // 计入 CPU 的是 JS 执行 + JSON 解析/序列化。本基准用进程内 mock fetch
 // （零网络、零 TLS），process.cpuUsage 差值即为纯 JS 开销，可直接映射 10ms 预算。
 // 用法: node cpu-bench.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
+import { join, dirname, tmpdir } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { run as runGlados } from '../src/tasks/glados-checkin.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCRIPTS = join(__dirname, '..', 'src', 'scripts');
 
-function load(name, patch) {
-  let code = readFileSync(join(SCRIPTS, name + '.txt'), 'utf8');
-  for (const [from, to] of patch || []) code = code.split(from).join(to);
-  return code;
-}
+// DNSHE 模块带 2 秒限流睡眠（不耗 CPU，但会拖慢基准）——基准用打了补丁的临时副本
+const dnsheSrc = readFileSync(join(__dirname, '..', 'src', 'tasks', 'dnshe-renew.js'), 'utf8');
+const patched = dnsheSrc.replace('const minInterval = 2;', 'const minInterval = 0;');
+const benchPath = join(tmpdir(), 'dnshe-bench.mjs');
+writeFileSync(benchPath, patched);
+const { run: runDnshe } = await import(pathToFileURL(benchPath));
 
 function makeCtx(fetchFn) {
   return {
@@ -82,20 +84,19 @@ function dnsheMock(domainCount) {
   };
 }
 
-function bench(label, scriptCode, fetchFn, ctxParams, iterations) {
+function bench(label, runFn, fetchFn, ctxParams, iterations) {
   // 预热（JIT + 内联缓存稳定后再计量，模拟常驻 isolate 的真实状态）
   const warm = makeCtx(fetchFn);
   warm.params = ctxParams;
-  const warmFn = new Function('ctx', '"use strict";\n' + scriptCode + '\nreturn main(ctx);');
   // 脚本有失败项时会按设计抛错，属预期，捕获即可（抛错开销同样计入测量）
-  return warmFn(warm).catch(() => undefined).then(() => {
+  return Promise.resolve(runFn(warm)).catch(() => undefined).then(() => {
     const cpu0 = process.cpuUsage();
     const t0 = Date.now();
     let chain = Promise.resolve();
     for (let i = 0; i < iterations; i++) {
       const c = makeCtx(fetchFn);
       c.params = ctxParams;
-      chain = chain.then(() => warmFn(c)).catch(() => undefined);
+      chain = chain.then(() => runFn(c)).catch(() => undefined);
     }
     return chain.then(() => {
       const cpu = process.cpuUsage(cpu0);
@@ -112,16 +113,12 @@ function bench(label, scriptCode, fetchFn, ctxParams, iterations) {
   });
 }
 
-const glados = load('glados-checkin');
-// 绕过 DNSHE 的 2 秒限流睡眠（睡眠不耗 CPU，只是拖慢基准）
-const dnshe = load('dnshe-renew', [['const minInterval = 2;', 'const minInterval = 0;']]);
-
 const COOKIE = 'gld:sess=gld_demo; gld:sess.sig=sigdemo';
-const r1 = await bench('GLaDOS 单账号 · 485分(不兑换)', glados, gladosMock(485), { cookie: COOKIE }, 300);
-const r2 = await bench('GLaDOS 单账号 · 520分(兑换+重查)', glados, gladosMock(520), { cookie: COOKIE }, 300);
-const r3 = await bench('GLaDOS 3账号最坏(全部兑换)', glados, gladosMock(520), { cookie: COOKIE + '\n' + COOKIE + '\n' + COOKIE }, 100);
-const r4 = await bench('DNSHE 10域名(2续期成功+1良性+1失败)', dnshe, dnsheMock(10), { api_key: 'k', api_secret: 's' }, 100);
-const r5 = await bench('DNSHE 30域名压测', dnshe, dnsheMock(30), { api_key: 'k', api_secret: 's' }, 100);
+const r1 = await bench('GLaDOS 单账号 · 485分(不兑换)', runGlados, gladosMock(485), { cookie: COOKIE }, 300);
+const r2 = await bench('GLaDOS 单账号 · 520分(兑换+重查)', runGlados, gladosMock(520), { cookie: COOKIE }, 300);
+const r3 = await bench('GLaDOS 3账号最坏(全部兑换)', runGlados, gladosMock(520), { cookie: COOKIE + '\n' + COOKIE + '\n' + COOKIE }, 100);
+const r4 = await bench('DNSHE 10域名(2续期成功+1良性+1失败)', runDnshe, dnsheMock(10), { api_key: 'k', api_secret: 's' }, 100);
+const r5 = await bench('DNSHE 30域名压测', runDnshe, dnsheMock(30), { api_key: 'k', api_secret: 's' }, 100);
 
 console.log('\n== 心跳单次调用合计（两任务同一小时到期、串行共处一次 DO alarm 调用） ==');
 console.log('最坏组合 = GLaDOS 3账号兑换 + DNSHE 30域名 ≈ ' + (r3 + r5).toFixed(3) + ' ms  vs  预算 10 ms');

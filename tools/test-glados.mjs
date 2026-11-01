@@ -3,12 +3,7 @@
 // 三种 Cookie 格式、推送无条件。曾借此抓出 pushLevel 残留导致的必崩 bug。
 // 用法: node test-glados.mjs
 import assert from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const code = readFileSync(join(__dirname, '..', 'src', 'scripts', 'glados-checkin.txt'), 'utf8');
+import { run as runGlados } from '../src/tasks/glados-checkin.js';
 
 function makeCtx(params, fetchFn) {
   const ctx = {
@@ -23,8 +18,7 @@ function makeCtx(params, fetchFn) {
 }
 
 function runScript(ctx) {
-  const fn = new Function('ctx', '"use strict";\n' + code + '\nreturn main(ctx);');
-  return fn(ctx);
+  return runGlados(ctx);
 }
 
 let passed = 0;

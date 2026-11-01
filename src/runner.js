@@ -1,30 +1,14 @@
-// 任务执行器：编译脚本 → 注入 ctx → 限时执行 → 日志落 D1 → 推进 next_run_at。
+// 任务执行器：按 script_key 调用内置库 → 注入 ctx → 限时执行 → 日志落 D1 → 推进 next_run_at。
+// 注意：Workers 运行时禁止字符串编译（new Function/eval），脚本一律来自打包的内置库模块。
 import { ensureReady } from './seed.js';
 import { getMeowNickname, meowPush } from './notify.js';
 import { advanceNext, tzOffsetSec } from './nextrun.js';
+import { BUILTINS } from './builtins.js';
 
 const TASK_TIMEOUT_MS = 90_000;   // 单任务墙钟保险丝
 const FETCH_TIMEOUT_MS = 30_000;  // ctx.fetch 单请求保险丝
 const MAX_LOG_LINES = 200;        // 每任务日志环形上限
 const MAX_NOTIFY = 10;            // 单次运行推送上限（防脚本失控刷通知）
-const MAX_COMPILED = 20;          // 编译缓存条数上限（改动频繁的脚本换新键，旧的清掉）
-
-// 编译缓存：脚本文本不变时跳过 new Function 的解析（~20KB 脚本一次约 1ms CPU，
-// 心跳每小时都会跑，缓存后常驻 isolate 内近乎免费）
-const compileCache = new Map();
-
-function compile(code) {
-  let fn = compileCache.get(code);
-  if (fn) return fn;
-  fn = new Function(
-    'ctx',
-    '"use strict";\n' + code +
-    '\n;if (typeof main !== "function") throw new Error("脚本缺少 main(ctx) 函数");\nreturn main(ctx);'
-  );
-  if (compileCache.size >= MAX_COMPILED) compileCache.clear();
-  compileCache.set(code, fn);
-  return fn;
-}
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -35,7 +19,7 @@ function withTimeout(promise, ms) {
 
 function parseParams(raw) {
   try {
-    const p = JSON.parse(raw || '{}');
+    const p = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;
     return p && typeof p === 'object' ? p : {};
   } catch (e) {
     return {};
@@ -67,8 +51,16 @@ async function runOne(env, task) {
   const startedAt = nowSec();
   pushLog('info', '开始执行');
 
+  const builtin = BUILTINS[task.script_key];
+  if (!builtin || typeof builtin.run !== 'function') {
+    pushLog('error', '未知内置脚本: ' + (task.script_key || '(空)'));
+    await flushLogs(db, task.id, logs);
+    await db.prepare('UPDATE tasks SET last_status=?, last_run_at=? WHERE id=?')
+      .bind('failed', nowSec(), task.id).run();
+    return 'failed';
+  }
+
   try {
-    const fn = compile(task.script_code || '');
     const nick = await getMeowNickname(db);
     let notifyCount = 0;
     const ctx = {
@@ -89,7 +81,7 @@ async function runOne(env, task) {
       },
       fetch: (url, init) => fetch(url, Object.assign({}, init, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })),
     };
-    await withTimeout(Promise.resolve(fn(ctx)), TASK_TIMEOUT_MS);
+    await withTimeout(Promise.resolve(builtin.run(ctx)), TASK_TIMEOUT_MS);
   } catch (e) {
     status = 'failed';
     pushLog('error', (e && e.message) || String(e));
@@ -126,7 +118,7 @@ export async function heartbeat(env) {
 }
 
 // 手动运行单个任务（不推进 next_run_at 以外的节奏；runOne 内部会正常推进锚点，
-// 与“手动运行不打乱节奏”的语义一致：锚点基于旧 next_run_at 计算）
+// 与"手动运行不打乱节奏"的语义一致：锚点基于旧 next_run_at 计算）
 export async function runTaskById(env, id) {
   await ensureReady(env);
   const task = await env.DB.prepare('SELECT * FROM tasks WHERE id=?').bind(Number(id)).first();

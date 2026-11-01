@@ -26,15 +26,9 @@
   ].join('\n');
 
   var SAMPLE_DNSHE = [
-    '// DNSHE 域名续期（完整逻辑第二步从 Python 移植，当前为演示骨架）',
-    'async function main(ctx) {',
-    '  const apiKey = ctx.params.apiKey;',
-    '  const apiSecret = ctx.params.apiSecret;',
-    "  if (!apiKey || !apiSecret) throw new Error('缺少参数：apiKey / apiSecret');",
-    '',
-    "  ctx.log('拉取域名列表…');",
-    '  // TODO: 分页拉取 + 阈值判断 + 逐个续期 + 汇总推送',
-    "  ctx.log('本次无需续期的域名');",
+    '// DNSHE 免费子域名自动续期（内置库成员，完整逻辑见 src/tasks/dnshe-renew.js）',
+    'export async function run(ctx) {',
+    '  // 分页拉取全部子域名 -> 按阈值判定 -> 逐个续期 -> 汇总推送（全局 MeoW）',
     '}'
   ].join('\n');
 
@@ -92,7 +86,7 @@
         run_hour: 9,
         run_day: null,
         params: { cookie: 'koa:sess=eyJhbGciOi（演示数据，可编辑）' },
-        script_code: SAMPLE_GLADOS,
+        script_key: 'glados-checkin',
         last_run_at: dailyAt(9, false),
         last_status: 'ok',
         next_run_at: dailyAt(9, true)
@@ -106,7 +100,7 @@
         run_hour: 9,
         run_day: 1,
         params: { apiKey: 'demo-key', apiSecret: 'demo-secret' },
-        script_code: SAMPLE_DNSHE,
+        script_key: 'dnshe-renew',
         last_run_at: monthlyAt(1, 9, false),
         last_status: 'ok',
         next_run_at: monthlyAt(1, 9, true)
@@ -120,7 +114,7 @@
         run_hour: null,
         run_day: null,
         params: { env: 'demo' },
-        script_code: SAMPLE_HEARTBEAT,
+        script_key: 'heartbeat-demo',
         last_run_at: null,
         last_status: 'never',
         next_run_at: nowSec() + 12 * 3600
@@ -275,6 +269,18 @@
     resetDemo: async function () {
       var data = seed();
       return data.tasks;
+    },
+
+    // ---------- 内置任务库（演示版） ----------
+    getBuiltins: async function () {
+      await sleep(80);
+      return {
+        builtins: [
+          { key: 'glados-checkin', name: 'GLaDOS 签到', params: ['cookie'], code: SAMPLE_GLADOS },
+          { key: 'dnshe-renew', name: 'DNSHE 域名续期', params: ['api_key', 'api_secret'], code: SAMPLE_DNSHE },
+          { key: 'heartbeat-demo', name: '心跳测试（演示）', params: ['env'], code: SAMPLE_HEARTBEAT }
+        ]
+      };
     },
 
     // ---------- 全局通知设置 ----------

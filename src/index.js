@@ -9,6 +9,7 @@ import { ensureReady } from './seed.js';
 import { getMeowNickname, meowPush, invalidateNickCache } from './notify.js';
 import { initialNext, tzOffsetSec } from './nextrun.js';
 import { TaskScheduler } from './scheduler.js';
+import { BUILTINS } from './builtins.js';
 
 export { TaskScheduler };
 
@@ -83,15 +84,15 @@ function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 function normalizeTask(body) {
   const unit = ['h', 'd', 'm'].includes(body.interval_unit) ? body.interval_unit : 'd';
   const name = String(body.name || '').trim().slice(0, 100);
-  const script = String(body.script_code || '');
+  const script_key = String(body.script_key || '');
   if (!name) throw new HttpError('名称不能为空');
-  if (!script.trim()) throw new HttpError('脚本不能为空');
-  if (script.length > 262144) throw new HttpError('脚本过大（上限 256KB）');
+  if (!BUILTINS[script_key]) throw new HttpError('未知内置脚本: ' + (script_key || '(未选择)'));
   const params = JSON.stringify(body.params && typeof body.params === 'object' ? body.params : {});
   if (params.length > 65536) throw new HttpError('参数过大（上限 64KB）');
   return {
     name,
-    script_code: script,
+    script_key: script_key,
+    script_code: '',           // 旧列保留兼容，现已不再存放脚本文本
     params: params,
     interval_unit: unit,
     interval_amount: clamp(Math.round(Number(body.interval_amount)) || 1, 1, UNIT_MAX[unit]),
@@ -161,8 +162,8 @@ async function route(request, env, url) {
       const t = normalizeTask(await bodyJson(request));
       const next = initialNext(t, Math.floor(Date.now() / 1000), tzOffsetSec(env));
       const res = await db.prepare(
-        'INSERT INTO tasks (name, enabled, script_code, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?)'
-      ).bind(t.name, t.enabled, t.script_code, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
+        'INSERT INTO tasks (name, enabled, script_key, script_code, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
+      ).bind(t.name, t.enabled, t.script_key, t.script_code, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
       const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(res.meta.last_row_id).first();
       return json({ task: toClientTask(task) });
     }
@@ -184,8 +185,8 @@ async function route(request, env, url) {
         ? initialNext(t, Math.floor(Date.now() / 1000), tzOffsetSec(env))
         : old.next_run_at;
       await db.prepare(
-        'UPDATE tasks SET name=?, enabled=?, script_code=?, params=?, interval_amount=?, interval_unit=?, run_hour=?, run_day=?, next_run_at=? WHERE id=?'
-      ).bind(t.name, t.enabled, t.script_code, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next, id).run();
+        'UPDATE tasks SET name=?, enabled=?, script_key=?, script_code=?, params=?, interval_amount=?, interval_unit=?, run_hour=?, run_day=?, next_run_at=? WHERE id=?'
+      ).bind(t.name, t.enabled, t.script_key, t.script_code, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next, id).run();
       const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
       return json({ task: toClientTask(task) });
     }
@@ -203,6 +204,15 @@ async function route(request, env, url) {
       return json({ ok: true });
     }
     throw new HttpError('不支持的方法', 405);
+  }
+
+  if (url.pathname === '/api/builtins' && method === 'GET') {
+    return json({
+      builtins: Object.keys(BUILTINS).map(function (k) {
+        const b = BUILTINS[k];
+        return { key: k, name: b.name, params: b.params, code: b.run.toString() };
+      }),
+    });
   }
 
   if (url.pathname === '/api/settings') {

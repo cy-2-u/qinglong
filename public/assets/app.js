@@ -52,7 +52,6 @@
     sun: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg>',
     moon: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.7A6.2 6.2 0 1 1 6.3 2.5a4.9 4.9 0 0 0 7.2 7.2z"/></svg>',
     gear: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><circle cx="10.5" cy="4.5" r="1.7" fill="var(--panel)"/><circle cx="5.5" cy="8" r="1.7" fill="var(--panel)"/><circle cx="9" cy="11.5" r="1.7" fill="var(--panel)"/></svg>',
-    'import': '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v7M5.5 6.5L8 9l2.5-2.5M3 11.5V13h10v-1.5"/></svg>',
     close: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
     back: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>'
   };
@@ -71,64 +70,20 @@
     return (t.interval_amount === 1 ? '每月 ' : '每 ' + t.interval_amount + ' 月 ') + (t.run_day == null ? 1 : t.run_day) + ' 日 ' + hh;
   }
 
-  // ---------- 任务头解析（导入用） ----------
-  var META_KEYS = ['name', 'unit', 'amount', 'hour', 'day', 'params'];
-
-  function parseQLMeta(text) {
-    var lines = String(text).split(/\r?\n/);
-    var metaLines = [];
-    var inBlock = false;
-    for (var i = 0; i < lines.length; i++) {
-      if (/==\s*qinglong\s*==/i.test(lines[i]) && !/\/qinglong/i.test(lines[i])) { inBlock = true; continue; }
-      if (/==\s*\/\s*qinglong\s*==/i.test(lines[i])) { inBlock = false; continue; }
-      if (inBlock) metaLines.push(lines[i]);
-    }
-    if (!inBlock && !metaLines.length) {
-      for (var j = 0; j < lines.length; j++) {
-        var t = lines[j].trim();
-        if (!t) continue;
-        if (/^(\/\/|\*|\/\*)/.test(t)) metaLines.push(t); else break;
-      }
-    }
-    var meta = {};
-    metaLines.forEach(function (raw) {
-      var m = raw.match(/^\s*(?:\/\/|\*+|\/\*+)?\s*([A-Za-z_]\w*)\s*[:：]\s*(.+?)\s*(?:\*\/)?\s*$/);
-      if (!m) return;
-      var k = m[1].toLowerCase();
-      if (META_KEYS.indexOf(k) >= 0) meta[k] = m[2].replace(/\*\/\s*$/, '').trim();
-    });
-    return meta;
-  }
-
-  function applyImport(text) {
-    var e = App.editing;
-    if (!e) return;
-    var meta = parseQLMeta(text);
-    e.script = text;
-    if (meta.name) e.name = meta.name;
-    if (meta.unit && ['h', 'd', 'm'].indexOf(meta.unit.toLowerCase()) >= 0) e.unit = meta.unit.toLowerCase();
-    if (meta.amount) e.amount = clamp(parseInt(meta.amount, 10) || 1, 1, unitInfo(e.unit).max);
-    if (meta.hour != null && meta.hour !== '') e.hour = clamp(parseInt(meta.hour, 10) || 0, 0, 23);
-    if (meta.day != null && meta.day !== '') e.day = clamp(parseInt(meta.day, 10) || 1, 1, 28);
-    if (meta.params) {
-      var keys = meta.params.split(/[,，;；\s]+/).filter(Boolean);
-      var have = {};
-      e.params.forEach(function (p) { if (p.k) have[p.k] = true; });
-      keys.forEach(function (k) { if (!have[k]) { e.params.push({ k: k, v: '' }); have[k] = true; } });
-    }
-    renderEditor();
-    toast(Object.keys(meta).length ? '已导入并填充配置' : '已导入', 'ok');
-  }
-
   // ---------- 全局状态 ----------
   var App = {
     authed: sessionStorage.getItem('ql.auth') === '1',
     theme: localStorage.getItem('ql.theme') || 'light',
     view: 'list',
     tasks: [],
+    builtins: [],          // 内置任务库（key/name/params/code），登录后加载
     editing: null,
     confirmResolver: null
   };
+
+  function builtinByKey(key) {
+    return App.builtins.find(function (b) { return b.key === key; }) || null;
+  }
 
   // ---------- 登录 ----------
   function renderLogin() {
@@ -246,7 +201,7 @@
       day: t && t.run_day != null ? t.run_day : 1,
       enabled: t ? !!t.enabled : true,
       params: t ? Object.keys(t.params || {}).map(function (k) { return { k: k, v: String(t.params[k]) }; }) : [{ k: '', v: '' }],
-      script: t ? t.script_code : ''
+      script_key: t && t.script_key ? t.script_key : (App.builtins[0] ? App.builtins[0].key : '')
     };
   }
 
@@ -257,11 +212,40 @@
     return (amount === 1 ? '每月 ' : '每 ' + amount + ' 月 ') + day + ' 日 ' + hh;
   }
 
+  function currentBuiltinCode(key) {
+    var b = builtinByKey(key);
+    return b && b.code ? b.code : '// 未知内置脚本';
+  }
+
+  function mergeBuiltinParams() {
+    var e = App.editing;
+    var b = builtinByKey(e.script_key);
+    if (!b || !b.params) return;
+    var have = {};
+    e.params.forEach(function (p) { if (p.k) have[p.k] = true; });
+    b.params.forEach(function (k) {
+      if (!have[k]) { e.params.push({ k: k, v: '' }); have[k] = true; }
+    });
+  }
+
+  async function loadBuiltins() {
+    try {
+      var r = await API.getBuiltins();
+      App.builtins = r && r.builtins ? r.builtins : [];
+    } catch (e) {
+      App.builtins = [];
+    }
+  }
+
   function renderEditor() {
     App.view = 'editor';
     var e = App.editing;
     var isNew = e.id == null;
     var info = unitInfo(e.unit);
+
+    var builtinOpts = App.builtins.map(function (b) {
+      return '<option value="' + esc(b.key) + '"' + (e.script_key === b.key ? ' selected' : '') + '>' + esc(b.name) + '</option>';
+    }).join('') || '<option value="">（内置库未加载）</option>';
 
     var hourOpts = '';
     for (var h = 0; h <= 23; h++) {
@@ -272,7 +256,6 @@
       '<div class="toolbar">' +
       '  <h2>' + (isNew ? '新建任务' : '编辑任务') + '</h2>' +
       '  <div class="toolbar-ops">' +
-      '    <button class="btn" data-action="import">' + ICONS.import + ' 导入脚本</button>' +
       '    <button class="btn" data-action="cancel-edit">' + ICONS.back + ' 返回</button>' +
       (isNew ? '' : '<button class="btn danger-ghost icon-btn" data-action="del-task-edit" data-id="' + e.id + '" title="删除任务">' + ICONS.trash + '</button>') +
       '  </div>' +
@@ -316,12 +299,13 @@
       '    <div id="paramRows">' + e.params.map(paramRowHtml).join('') + '</div>' +
       '  </div>' +
 
-      // 脚本
+      // 脚本（内置库选择器 + 只读源码）
       '  <div class="form-sec">' +
       '    <div class="sec-head"><span class="sec-title">脚本</span>' +
-      '      <button class="btn ghost" data-action="insert-meta">插入任务头</button>' +
+      '      <select id="fBuiltin" class="freq-hour">' + builtinOpts + '</select>' +
       '    </div>' +
-      '    <textarea id="fScript" class="script-box" spellcheck="false" placeholder="async function main(ctx) {&#10;  // ctx.params 参数 · ctx.log() 日志 · ctx.notify() 推送 · ctx.fetch() 请求&#10;}">' + esc(e.script) + '</textarea>' +
+      '    <pre class="script-view" id="scriptView">' + esc(currentBuiltinCode(e.script_key)) + '</pre>' +
+      '    <div class="hint">内置脚本随仓库更新（只读）。添加新脚本：src/tasks/ 新增模块并在 builtins.js 注册，push 自动部署。</div>' +
       '  </div>' +
 
       // 底部操作
@@ -484,7 +468,7 @@
     );
   }
 
-  // ---------- 通知设置 ----------
+  // ---------- 通知设置（全局 MeoW 推送） ----------
   async function actionSettings() {
     var s = await API.getSettings();
     openModal(
@@ -502,73 +486,6 @@
       '  <button class="btn primary" data-action="save-settings">保存</button>' +
       '</div>', true
     );
-  }
-
-  // ---------- 导入 ----------
-  function openImport() {
-    openModal(
-      '<div class="modal-head"><b>导入脚本</b></div>' +
-      '<div class="modal-body">' +
-      '  <div class="import-file-row">' +
-      '    <input type="file" id="importFile" accept=".js,.mjs,.txt" class="hidden">' +
-      '    <button class="btn" data-action="import-pick">选择文件</button>' +
-      '    <span class="muted" id="importFileTip">或拖拽文件到下方</span>' +
-      '  </div>' +
-      '  <textarea id="importText" class="script-box import-box" spellcheck="false" placeholder="粘贴脚本内容"></textarea>' +
-      '  <div class="modal-hint">带 ==qinglong== 任务头的脚本会自动填充配置</div>' +
-      '</div>' +
-      '<div class="modal-foot">' +
-      '  <button class="btn" data-action="close-modal">取消</button>' +
-      '  <button class="btn primary" data-action="do-import">导入</button>' +
-      '</div>'
-    );
-
-    function readFile(f) {
-      if (!f) return;
-      var r = new FileReader();
-      r.onload = function () {
-        var box = $('#importText'), tip = $('#importFileTip');
-        if (box) box.value = r.result;
-        if (tip) tip.textContent = f.name;
-      };
-      r.readAsText(f);
-    }
-
-    var fileInput = $('#importFile');
-    fileInput.addEventListener('change', function () { readFile(fileInput.files[0]); });
-    var box = $('#importText');
-    box.addEventListener('dragover', function (ev) { ev.preventDefault(); box.classList.add('dragover'); });
-    box.addEventListener('dragleave', function () { box.classList.remove('dragover'); });
-    box.addEventListener('drop', function (ev) {
-      ev.preventDefault();
-      box.classList.remove('dragover');
-      readFile(ev.dataTransfer.files && ev.dataTransfer.files[0]);
-    });
-  }
-
-  function insertMetaHeader() {
-    var e = App.editing;
-    var ta = $('#fScript');
-    if (!ta) return;
-    if (ta.value.indexOf('==qinglong==') >= 0) { toast('已包含任务头', 'fail'); return; }
-
-    harvestParams();
-    var amount = clamp(+$('#fAmount').value || e.amount, 1, unitInfo(e.unit).max);
-    var hour = $('#rowHour') && !$('#rowHour').classList.contains('hidden') ? (+$('#fHour').value || 0) : e.hour;
-    var day = $('#rowDay') && !$('#rowDay').classList.contains('hidden') ? (+$('#fDay').value || 1) : e.day;
-    var keys = e.params.map(function (p) { return p.k; }).filter(Boolean);
-
-    var head = '// ==qinglong==\n';
-    head += '// name: ' + ($('#fName').value.trim() || '新任务') + '\n';
-    head += '// unit: ' + e.unit + '\n';
-    head += '// amount: ' + amount + '\n';
-    if (e.unit !== 'h') head += '// hour: ' + hour + '\n';
-    if (e.unit === 'm') head += '// day: ' + day + '\n';
-    head += '// params: ' + keys.join(', ') + '\n';
-    head += '// ==/qinglong==\n\n';
-
-    ta.value = head + ta.value;
-    toast('已插入任务头', 'ok');
   }
 
   // ---------- 动作 ----------
@@ -612,8 +529,7 @@
     var params = {};
     e.params.forEach(function (p) { if (p.k) params[p.k] = p.v; });
 
-    var script = $('#fScript').value;
-    if (!script.trim()) { toast('脚本不能为空', 'fail'); return; }
+    if (!e.script_key || !builtinByKey(e.script_key)) { toast('请选择内置脚本', 'fail'); return; }
 
     var task = {
       id: e.id,
@@ -624,7 +540,7 @@
       run_hour: run_hour,
       run_day: run_day,
       params: params,
-      script_code: script
+      script_key: e.script_key
     };
 
     try {
@@ -724,17 +640,6 @@
           .then(function () { toast('测试推送已发送', 'ok'); })
           .catch(function (err) { toast('推送失败：' + err.message, 'fail'); });
         break;
-
-      case 'import': openImport(); break;
-      case 'import-pick': $('#importFile').click(); break;
-      case 'do-import': {
-        var text = $('#importText').value;
-        if (!text.trim()) { toast('内容为空', 'fail'); break; }
-        closeModal(false);
-        applyImport(text);
-        break;
-      }
-      case 'insert-meta': insertMetaHeader(); break;
     }
   }
 
@@ -752,6 +657,13 @@
       return;
     }
     if (el.id === 'fHour' || el.id === 'fDay') updateFreqPreview();
+    if (el.id === 'fBuiltin') {
+      harvestSchedule();
+      harvestParams();
+      App.editing.script_key = el.value;
+      mergeBuiltinParams();
+      renderEditor();
+    }
   }
 
   function onInput(ev) {
@@ -768,8 +680,7 @@
         if (!ok) { toast('密码错误', 'fail'); return; }
         App.authed = true;
         sessionStorage.setItem('ql.auth', '1');
-        renderShell();
-        loadTasks().then(renderList);
+        enterPanel();
       })
       .catch(function (err) {
         if (err.message === 'UNAUTHORIZED') toast('密码错误', 'fail');
@@ -779,13 +690,6 @@
 
   function onKeyDown(ev) {
     if (ev.key === 'Escape') { closeModal(false); return; }
-    if (ev.key === 'Tab' && ev.target.id === 'fScript') {
-      ev.preventDefault();
-      var ta = ev.target;
-      var s = ta.selectionStart, epos = ta.selectionEnd;
-      ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(epos);
-      ta.selectionStart = ta.selectionEnd = s + 2;
-    }
   }
 
   // ---------- 入口 ----------
@@ -795,7 +699,7 @@
 
   async function enterPanel() {
     renderShell();
-    await loadTasks();
+    await Promise.all([loadBuiltins(), loadTasks()]);
     renderList();
   }
 

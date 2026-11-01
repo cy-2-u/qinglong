@@ -15,8 +15,8 @@ crons = ["0 * * * *"]
 [vars]
 TZ_OFFSET = "8"
 
-# src/scripts/*.txt 的 Text 模块规则由 wrangler 内置默认提供，无需显式配置
-# （注意：rules 若写在 [vars] 段之后会被当成变量，曾导致 env.rules 出现在绑定里）
+# 内置任务脚本在 src/tasks/ 以 ES 模块随构建打包（Workers 运行时禁止编译字符串，
+# 面板不存脚本文本，任务通过 script_key 引用内置库成员）
 
 # D1 库由 CI 自动"查找或创建"名为 qinglong 的库并回填此占位符；
 # 本地 dev（wrangler dev）直接用全零占位符即可

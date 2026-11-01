@@ -51,6 +51,7 @@
     runTask: function (id) { return call('/tasks/' + id + '/run', { method: 'POST' }); },
     listLogs: function (taskId) { return call('/tasks/' + taskId + '/logs').then(function (b) { return b.logs; }); },
     resetDemo: null,
+    getBuiltins: function () { return call('/builtins'); },
     getSettings: function () { return call('/settings'); },
     saveSettings: function (s) { return call('/settings', { method: 'PUT', body: JSON.stringify(s) }); },
     testNotify: function (nickname) { return call('/settings/test', { method: 'POST', body: JSON.stringify({ nickname: nickname }) }); }
@@ -70,6 +71,7 @@
     runTask: function (id) { return backend().runTask(id); },
     listLogs: function (id) { return backend().listLogs(id); },
     resetDemo: function () { return backend().resetDemo(); },
+    getBuiltins: function () { return backend().getBuiltins(); },
     getSettings: function () { return backend().getSettings(); },
     saveSettings: function (s) { return backend().saveSettings(s); },
     testNotify: function (nick) { return backend().testNotify(nick); }

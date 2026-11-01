@@ -33,16 +33,16 @@ foreach ($f in $esm) {
   if ($LASTEXITCODE -ne 0) { Write-Output "SYNTAX_FAIL: src/$f"; exit 1 }
 }
 
-# 4) builtin script texts -> copy as .mjs then check
-$txts = @('glados-checkin.txt', 'dnshe-renew.txt')
-foreach ($f in $txts) {
-  $p = Join-Path $root 'src\scripts'
-  $p = Join-Path $p $f
-  $d = Join-Path $tmp ($f.Replace('.txt', '.mjs'))
-  Copy-Item $p $d -Force
-  node --check $d
-  if ($LASTEXITCODE -ne 0) { Write-Output "SYNTAX_FAIL: scripts/$f"; exit 1 }
-}
+  # 4) builtin task modules -> copy as .mjs then check
+  $tasks = @('glados-checkin.js', 'dnshe-renew.js')
+  foreach ($f in $tasks) {
+    $p = Join-Path $root 'src\tasks'
+    $p = Join-Path $p $f
+    $d = Join-Path $tmp $f
+    Copy-Item $p $d -Force
+    node --check $d
+    if ($LASTEXITCODE -ne 0) { Write-Output "SYNTAX_FAIL: tasks/$f"; exit 1 }
+  }
 
 Remove-Item -Recurse -Force $tmp
 Write-Output 'SMOKE_OK'

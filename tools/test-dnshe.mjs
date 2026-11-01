@@ -4,12 +4,7 @@
 // 空列表语义、缺参 fail-fast、凭据错误提示。
 // 用法: node test-dnshe.mjs
 import assert from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const code = readFileSync(join(__dirname, '..', 'src', 'scripts', 'dnshe-renew.txt'), 'utf8');
+import { run as runDnshe } from '../src/tasks/dnshe-renew.js';
 
 const TZ = 8;
 const DAY = 86400000;
@@ -36,8 +31,7 @@ function res(status, body) {
 }
 
 function runScript(ctx) {
-  const fn = new Function('ctx', '"use strict";\n' + code + '\nreturn main(ctx);');
-  return fn(ctx);
+  return runDnshe(ctx);
 }
 
 let passed = 0;
