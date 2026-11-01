@@ -72,7 +72,7 @@
 
   // ---------- 全局状态 ----------
   var App = {
-    authed: sessionStorage.getItem('ql.auth') === '1',
+    authed: localStorage.getItem('ql.auth') === '1',
     theme: localStorage.getItem('ql.theme') || 'light',
     view: 'list',
     tasks: [],
@@ -92,7 +92,6 @@
       '  <form class="login-card" id="loginForm">' +
       '    <div class="win-dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>' +
       '    <h1>青龙</h1>' +
-      '    <div class="login-sub"><span class="tag">Workers 版</span></div>' +
       (API.mode === 'mock' ? '<p class="muted">演示模式 · 任意密码</p>' : '') +
       '    <input type="password" id="loginPw" placeholder="面板密码" autocomplete="current-password" required>' +
       '    <button class="btn primary block" type="submit">进入</button>' +
@@ -105,7 +104,7 @@
   function renderShell() {
     $('#app').innerHTML =
       '<header class="topbar">' +
-      '  <div class="brand">青龙 <span class="tag">Workers 版</span></div>' +
+      '  <div class="brand">青龙</div>' +
       '  <div class="top-actions">' +
       '    <span class="mode-badge" id="modeBadge"></span>' +
       '    <button class="btn ghost icon-btn" id="btnReset" data-action="reset-demo" title="重置演示数据">' + ICONS.refresh + '</button>' +
@@ -152,7 +151,7 @@
       '  <h2>定时任务</h2>' +
       '  <div class="toolbar-ops">' +
       '    <button class="btn ghost icon-btn" data-action="refresh" title="刷新">' + ICONS.refresh + '</button>' +
-      '    <button class="btn primary" data-action="new-task">' + ICONS.plus + ' 新建</button>' +
+      '    <button class="btn primary" data-action="new-task">' + ICONS.plus + ' 新建任务</button>' +
       '  </div>' +
       '</div>' + cards;
 
@@ -299,10 +298,12 @@
       '    <div id="paramRows">' + e.params.map(paramRowHtml).join('') + '</div>' +
       '  </div>' +
 
-      // 脚本（内置库选择器 + 只读源码）
+      // 脚本（新建时选一次内置脚本；编辑时锁定不可更换）
       '  <div class="form-sec">' +
       '    <div class="sec-head"><span class="sec-title">脚本</span>' +
-      '      <select id="fBuiltin" class="freq-hour">' + builtinOpts + '</select>' +
+      (isNew
+        ? '      <select id="fBuiltin" class="freq-hour">' + builtinOpts + '</select>'
+        : '      <span class="muted">' + esc((builtinByKey(e.script_key) || {}).name || e.script_key || '未知') + '</span>') +
       '    </div>' +
       '    <pre class="script-view" id="scriptView">' + esc(currentBuiltinCode(e.script_key)) + '</pre>' +
       '    <div class="hint">内置脚本随仓库更新（只读）。添加新脚本：src/tasks/ 新增模块并在 builtins.js 注册，push 自动部署。</div>' +
@@ -606,7 +607,7 @@
 
       case 'logout':
         App.authed = false;
-        sessionStorage.removeItem('ql.auth');
+        localStorage.removeItem('ql.auth');
         renderLogin();
         break;
 
@@ -657,12 +658,11 @@
       return;
     }
     if (el.id === 'fHour' || el.id === 'fDay') updateFreqPreview();
-    if (el.id === 'fBuiltin') {
-      harvestSchedule();
-      harvestParams();
+    // 内置脚本只在新建任务时可选；已有任务的脚本不可更换（避免参数串味）
+    if (el.id === 'fBuiltin' && App.editing && App.editing.id == null) {
       App.editing.script_key = el.value;
       mergeBuiltinParams();
-      renderEditor();
+      $('#scriptView').textContent = currentBuiltinCode(el.value);
     }
   }
 
@@ -679,7 +679,7 @@
       .then(function (ok) {
         if (!ok) { toast('密码错误', 'fail'); return; }
         App.authed = true;
-        sessionStorage.setItem('ql.auth', '1');
+        localStorage.setItem('ql.auth', '1');
         enterPanel();
       })
       .catch(function (err) {
@@ -710,6 +710,14 @@
     document.addEventListener('input', onInput);
     document.addEventListener('submit', onSubmit);
     document.addEventListener('keydown', onKeyDown);
+    // 会话过期（Cookie 30 天后失效）时全局接管：弹回登录页
+    window.addEventListener('ql:unauthorized', function () {
+      if (!App.authed) return;
+      App.authed = false;
+      localStorage.removeItem('ql.auth');
+      renderLogin();
+      toast('登录已过期，请重新输入密码', 'fail');
+    });
     API.onReady(function () { syncModeBadge(); });
 
     if (App.authed) {

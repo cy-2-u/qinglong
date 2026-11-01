@@ -36,7 +36,11 @@
       headers: { 'content-type': 'application/json' },
       credentials: 'same-origin'
     }, init || {}));
-    if (r.status === 401) { throw new Error('UNAUTHORIZED'); }
+    if (r.status === 401) {
+      // 广播会话失效，由 UI 全局接管（自动弹回登录页）
+      try { window.dispatchEvent(new CustomEvent('ql:unauthorized')); } catch (e) { /* 忽略 */ }
+      throw new Error('UNAUTHORIZED');
+    }
     var body = await r.json().catch(function () { return {}; });
     if (!r.ok) throw new Error(body.error || ('HTTP ' + r.status));
     return body;

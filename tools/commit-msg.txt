@@ -1,24 +1,12 @@
-refactor!: builtin task library - no runtime codegen
+feat: panel UX round - lock script per task, persistent login, de-brand
 
-Runtime reality check: Workers disallow string compilation
-(new Function/eval) entirely - the panel-stored script approach crashed
-with "Code generation from strings disallowed for this context" on the
-first real run. The defensive runner captured it cleanly, but the model
-must change: scripts are now bundled ES modules executed natively.
-
-- src/tasks/*.js: GLaDOS + DNSHE as modules exporting run(ctx)
-  (content unchanged, previously .txt snapshots)
-- src/builtins.js: registry {key: {name, params, run}}
-- runner: resolves BUILTINS[task.script_key].run; compile/new Function
-  and its cache removed; unknown key -> logged failure
-- seed: script_key column + ALTER-table migration + backfill from old
-  script_code content (existing D1 tasks keep working)
-- API: POST/PUT take script_key (validated against registry);
-  GET /api/builtins serves key/name/params/code for the panel
-- panel: script section is now a builtin picker + read-only source view
-  (params auto-merge from registry); import modal / task-header tooling
-  removed (dead without runtime codegen)
-- tests/bench import the modules directly; smoke checks tasks/*.js
-- README: builtin-library workflow + why dynamic scripts are impossible
-
-Regression: 21/21 passing
+- editor: builtin script is chosen once at task creation; existing tasks
+  show the assigned script locked (no dropdown) - switching scripts on a
+  live task mixed param keys and made no semantic sense
+- list toolbar button renamed to 新建任务 (it creates a task binding,
+  not a script)
+- auto login: auth flag moved from sessionStorage to localStorage
+  (server cookie is already 30d); any 401 broadcasts ql:unauthorized
+  and the UI drops back to the login page with a toast
+- removed "Workers 版" branding from login page, topbar and title;
+  dropped now-unused .tag/.login-sub styles
