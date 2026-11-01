@@ -1,11 +1,5 @@
-feat: final pre-launch audit - favicon, summary strip, copy cleanup
+docs: reference/ is a deliberate keep
 
-- site icon: terracotta rounded square + open white ring + hub dot
-  (coiled dragon / timer mark), svg favicon + theme-color meta
-- task list: slim summary strip under the toolbar (task/enabled counts +
-  next scheduled task with time) fills the page and reads at a glance
-- copy: stale "import scripts" empty-state text, "Workers 版" header
-  comment, builtins comment (code field removed earlier)
-- no dead code found in app.js/index.js/runner.js/seed.js on re-read;
-  css verified clean (.label-row absent, .strip added)
-- asset version bumped to 20261101c
+documented the retention reason in the tree so future audits don't
+re-flag it: baseline for diffing production scripts when GLaDOS/DNSHE
+change their APIs; dnshe_LICENSE travels with the derived port

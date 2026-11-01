@@ -41,7 +41,7 @@ qinglong/
 │   ├── notify.js           # MeoW 全局推送（api.chuckfang.com）
 │   ├── seed.js             # D1 建表/迁移 + 内置任务播种（原子认领防竞态）
 │   └── coordinator.js      # 单飞协调器（移植自 UptimeFlare）
-├── reference/              # 移植参考（GLaDOS / DNSHE 原脚本、UptimeFlare 调度源码）
+├── reference/              # 原始实现对照基线（刻意保留）：线上签到/续期失败时，与内置脚本逐行比对排错；DNSHE py 含完整错误码语义
 ├── tools/
 │   ├── smoke.ps1           # 回归入口：21 个测试 + 全部语法检查
 │   ├── test-nextrun.mjs / test-dnshe.mjs / test-glados.mjs
