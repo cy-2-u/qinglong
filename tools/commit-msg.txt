@@ -1,28 +1,8 @@
-refactor: full architecture audit - fixes, hardening, cleanup
+fix: import DurableObject base class; drop misplaced rules entry
 
-Backend fixes (real bugs found by the audit):
-- scheduler: alarm() used RunCoordinator.run() which JOINS an in-flight
-  manual run, silently skipping that heartbeat and its alarm re-arm;
-  switched to mutate() so heartbeats queue after manual runs
-- runner: crash recovery - a task stuck in last_status='running' after
-  isolate eviction was skipped forever; heartbeat now reclaims stale
-  running rows (safe: all runs serialize through the single DO)
-- runner: compile cache (new Function parse skipped when script text
-  unchanged, ~1ms CPU per heartbeat saved); notify cap (10/run)
-- index: size caps for script_code (256KB) and params (64KB)
-- seed: atomic claim via INSERT OR IGNORE - concurrent cold isolates
-  no longer double-seed builtin tasks
-
-Frontend fixes:
-- editor: unit switch / param add/remove lost unsaved amount/hour/day
-  inputs (re-render used stale editing state); added harvestSchedule()
-- removed redundant branch in actionDelete
-- mock demo: dailyAt/monthlyAt seeded "last run" in the future and
-  "next run" two days out; legacy pushplus log text -> MeoW
-
-Project cleanup:
-- removed six one-off setup scripts (prep/findgit/cleanup/verify-repo/
-  ci-log x2); upload.ps1 now honors tools/delete-list.txt for remote
-  deletions; README tree refreshed
-
-Regression: 21/21 tests passing
+- scheduler.js: extend DurableObject from 'cloudflare:workers' - it is not
+  a global, deploy validation failed with ReferenceError (code 10021)
+- wrangler.toml: remove rules=[...] - it sat after [vars] so TOML turned
+  it into an env var (env.rules in bindings); wrangler's built-in default
+  rule already maps **/*.txt to Text modules
+- tools/ci-log.ps1: reusable CI log fetcher (replaces the deleted one-off)

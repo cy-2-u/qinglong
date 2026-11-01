@@ -15,10 +15,8 @@ crons = ["0 * * * *"]
 [vars]
 TZ_OFFSET = "8"
 
-# 面板脚本以纯文本导入（src/scripts/*.txt）
-rules = [
-  { type = "Text", globs = ["**/*.txt"] }
-]
+# src/scripts/*.txt 的 Text 模块规则由 wrangler 内置默认提供，无需显式配置
+# （注意：rules 若写在 [vars] 段之后会被当成变量，曾导致 env.rules 出现在绑定里）
 
 # D1 库由 CI 自动"查找或创建"名为 qinglong 的库并回填此占位符；
 # 本地 dev（wrangler dev）直接用全零占位符即可

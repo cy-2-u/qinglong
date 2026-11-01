@@ -2,6 +2,7 @@
 // - alarm() 每小时心跳：跑到期任务，最后无条件续上下一班闹钟（先上弦再干活的变体：
 //   即使本轮崩溃，finally 也把闹钟续上；闹钟丢失时由 cron trigger /health 兜底重新上弦）。
 // - runTask(id) 手动运行，与心跳共用单飞锁，互不并发。
+import { DurableObject } from 'cloudflare:workers';
 import { ensureReady } from './seed.js';
 import { heartbeat, runTaskById } from './runner.js';
 import { RunCoordinator } from './coordinator.js';
