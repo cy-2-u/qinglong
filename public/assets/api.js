@@ -45,7 +45,7 @@
   var LiveAPI = {
     login: function (pw) { return call('/login', { method: 'POST', body: JSON.stringify({ password: pw }) }); },
     listTasks: function () { return call('/tasks').then(function (b) { return b.tasks; }); },
-    saveTask: function (t) { return call('/tasks', { method: t.id ? 'PUT' : 'POST', body: JSON.stringify(t) }); },
+    saveTask: function (t) { return call('/tasks' + (t.id ? '/' + t.id : ''), { method: t.id ? 'PUT' : 'POST', body: JSON.stringify(t) }); },
     deleteTask: function (id) { return call('/tasks/' + id, { method: 'DELETE' }); },
     toggleTask: function (id, enabled) { return call('/tasks/' + id, { method: 'PATCH', body: JSON.stringify({ enabled: enabled ? 1 : 0 }) }); },
     runTask: function (id) { return call('/tasks/' + id + '/run', { method: 'POST' }); },

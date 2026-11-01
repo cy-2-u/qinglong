@@ -1,11 +1,6 @@
-fix: API contract - tasks always return params as an object
+fix: live saveTask sent PUT /api/tasks without the id
 
-D1 stores params as a JSON string (TEXT column); the endpoints returned
-rows as-is, so live mode sent params as a string and the editor's
-Object.keys() exploded it into one param row per character (the
-"{" "c" "o" "o" "k" "i" "e"... rows). Mock mode returned real objects
-so the contract mismatch never surfaced locally.
-
-- toClientTask() parses params (fallback {} on bad JSON) and is applied
-  to every endpoint that returns a task row (list/create/update/patch)
-- runner already parsed params defensively, unaffected
+server route is PUT /api/tasks/:id; the id-less PUT fell through to the
+405 branch ("unsupported method") - exactly what the panel showed on
+save. Build the path from t.id (POST /tasks for new, PUT /tasks/:id for
+existing). All other LiveAPI methods verified against server routes.
