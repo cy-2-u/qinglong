@@ -56,14 +56,21 @@ foreach ($f in $files) {
   $entries += [PSCustomObject]@{ path = $rel; mode = '100644'; type = 'blob'; content = $content }
 }
 
-# paths listed in delete-list.txt are removed from the repo (sha=null deletes the entry)
+# paths listed in delete-list.txt are removed from the repo (sha=null deletes the entry);
+# skip paths already absent from the base tree (GitHub rejects deleting nonexistent entries)
 $deleteListFile = Join-Path $PSScriptRoot 'delete-list.txt'
 if (Test-Path $deleteListFile) {
+  $basePathSet = @{}
+  gh api "repos/$full/git/trees/$baseTree?recursive=1" --jq '.tree[].path' 2>$null | ForEach-Object { $basePathSet[$_] = $true }
   Get-Content $deleteListFile -Encoding UTF8 | ForEach-Object {
     $p = $_.Trim()
     if ($p -and -not $p.StartsWith('#')) {
-      $entries += [PSCustomObject]@{ path = $p.Replace('\', '/'); mode = '100644'; type = 'blob'; sha = $null }
-      Write-Output ("DELETE_REMOTE: " + $p)
+      if ($basePathSet.ContainsKey($p.Replace('\', '/'))) {
+        $entries += [PSCustomObject]@{ path = $p.Replace('\', '/'); mode = '100644'; type = 'blob'; sha = $null }
+        Write-Output ("DELETE_REMOTE: " + $p)
+      } else {
+        Write-Output ("DELETE_SKIP (not in base tree): " + $p)
+      }
     }
   }
 }

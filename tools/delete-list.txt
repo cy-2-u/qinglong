@@ -6,3 +6,4 @@ tools/cleanup.ps1
 tools/verify-repo.ps1
 tools/ci-log.ps1
 tools/ci-log2.ps1
+tools/debug-commit.ps1
