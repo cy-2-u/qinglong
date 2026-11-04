@@ -16,3 +16,5 @@ relay/.gitignore
 relay/.vercel/README.txt
 relay/.vercel/project.json
 public/assets/style.css
+# ---- 一次性诊断脚本 ----
+tools/diag-baseset.ps1
