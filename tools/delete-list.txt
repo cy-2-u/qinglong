@@ -11,5 +11,8 @@ tools/serve.mjs
 tools/debug-commit.ps1
 src/scripts/dnshe-renew.txt
 src/scripts/glados-checkin.txt
-# ---- relay 目录残留（若 .vercel 项目配置曾被推上去）----
+# ---- relay 目录残留（.vercel 项目配置 + Vercel JSON 配置实际路径）----
 relay/.gitignore
+relay/.vercel/README.txt
+relay/.vercel/project.json
+public/assets/style.css
