@@ -1,11 +1,7 @@
-feat: MeoW push multi-path fallback (relay POST -> relay GET -> direct)
+feat: Vercel relay as primary MeoW path (5-path fallback)
 
-the relay's Cloudflare WAF fingerprints requests and intermittently
-blocks Worker-originated POSTs (local replay always 200, production
-403 with empty body). meowPush now tries relay POST, then relay GET
-(different fingerprint, MeoW path format /nick/title/msg), then
-direct POST as a last resort; first success wins. error detail now
-carries each path's response body snippet (previous code consumed
-the body via res.json() so the fallback text() read was empty).
-adds tools/test-notify.mjs: 16 unit tests covering fallback order,
-body parsing, and error detail; wired into smoke.ps1 (37 total).
+self-hosted relay on Vercel (relay/ dir, relay-nu-seven.vercel.app)
+has no third-party WAF quirks; inserted as paths 1-2 (POST + GET),
+down.nigx.cn demoted to 3-4, direct as 5. note: *.vercel.app DNS is
+poisoned on CN networks but the Worker resolves from CF edge fine.
+test-notify.mjs extended to 21 tests covering the new order.
