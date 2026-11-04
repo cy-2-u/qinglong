@@ -18,3 +18,8 @@ relay/.vercel/project.json
 public/assets/style.css
 # ---- 一次性诊断脚本 ----
 tools/diag-baseset.ps1
+tools/ci-probe.ps1
+tools/prod-settings-check.ps1
+tools/prod-verify.ps1
+tools/remote-tree.ps1
+tools/cleanup-remote.ps1
