@@ -1,5 +1,5 @@
-docs: reference/ is a deliberate keep
+feat: route MeoW push through down.nigx.cn relay
 
-documented the retention reason in the tree so future audits don't
-re-flag it: baseline for diffing production scripts when GLaDOS/DNSHE
-change their APIs; dnshe_LICENSE travels with the derived port
+MeoW (api.chuckfang.com) blocks Cloudflare IP ranges, so pushes from
+the Worker never arrive. Relay prefix strips the scheme and forwards
+POST/JSON verbatim; verified end to end against the live API.

@@ -1,5 +1,7 @@
 // 全局通知：MeoW（https://api.chuckfang.com），昵称存 settings 表。
 // POST /{昵称}，body {"title": ..., "msg": ...}，与 DNSHE 脚本现行用法一致。
+// MeoW 屏蔽 Cloudflare IP（Worker 出口全是 CF 段），故走 down.nigx.cn
+// URL 中转（去掉协议头拼路径，POST/JSON 原样透传，已实测）。
 
 let cachedNick = null;
 let cachedAt = 0;
@@ -30,9 +32,12 @@ export function safeTitle(t) {
   return String(t).replace(/[:：/]/g, '-').slice(0, 64);
 }
 
+// 中转前缀：MeoW 屏蔽 CF IP，Worker 出口走这里；格式为去协议头拼路径
+const MEOW_BASE = 'https://down.nigx.cn/api.chuckfang.com/';
+
 export async function meowPush(env, nickname, title, content) {
   if (!nickname) throw new Error('MeoW 昵称未配置');
-  const res = await fetch('https://api.chuckfang.com/' + encodeURIComponent(nickname), {
+  const res = await fetch(MEOW_BASE + encodeURIComponent(nickname), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title: safeTitle(title), msg: String(content).slice(0, 2000) }),
