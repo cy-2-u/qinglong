@@ -1,13 +1,9 @@
-refactor: panel rewrite - drop legacy notify paths, split frontend, self-healing anchors
+refactor(ui): mobile-first responsive redesign of task cards
 
-- notify: TimelyNotify direct GET only; remove MeoW relay chains and Vercel proxy leftovers
-- auth: extract HMAC cookie session into auth.js; Secure flag follows request protocol
-- scheduling: computeNext re-derives anchors from rule for 1-day/1-month tasks;
-  healedAnchor corrects drifted next_run_at during heartbeat
-- seed: drop script_code column and migration block (schema is script_key-only)
-- frontend: split into api.js / components.js / app.js + 4-file CSS;
-  30s refresh patches cards in place instead of full re-render
-- runner: notify gate logs when key unset; manual runs keep schedule untouched
-- upload: fix silent remote-delete no-op (PS5.1 ConvertTo-Json drops null sha);
-  delete entries spliced as raw JSON literals
-- repo cleanup: delete-list for relay/, mock.js, serve.mjs, src/scripts/, debug tooling
+- card: stacked layout by default (name+script chip / meta / status+switch+actions),
+  row layout restored at >=560px; fixes one-char-per-line squeeze on phones
+- actions: text buttons replaced with compact icon buttons (run/logs/edit/delete)
+- editor: fix interval/hour inputs stretched full width (input.freq-num specificity
+  beats input[type=number]); freq preview copy aligned with freqText
+- fmtTime drops seconds (logs keep them); freq text "每 1 天" -> "每天"
+- asset cache bump to v=20261105b

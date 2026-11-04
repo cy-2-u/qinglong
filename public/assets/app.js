@@ -11,8 +11,8 @@
   var ICONS = {
     logo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>',
     plus: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
-    play: '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
-    edit: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>',
+    run: '<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.6 6.2c0-.9.95-1.4 1.7-1l5 3c.75.45.75 1.55 0 2l-5 3c-.75.4-1.7-.1-1.7-1z"/></svg>',
+    pen: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>',
     doc: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8"/></svg>',
     gear: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
@@ -48,22 +48,22 @@
   // ---------- 小工具 ----------
   function pad(n) { return (n < 10 ? '0' : '') + n; }
 
-  function fmtTime(sec) {
+  function fmtTime(sec, withSec) {
     if (!sec) return '从未';
     var d = new Date(sec * 1000), now = new Date();
     var hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
-    if (d.toDateString() === now.toDateString()) return hm + ':' + pad(d.getSeconds());
+    if (d.toDateString() === now.toDateString()) return withSec ? hm + ':' + pad(d.getSeconds()) : hm;
     return (d.getMonth() + 1) + '-' + d.getDate() + ' ' + hm;
   }
 
   function freqText(t) {
-    var n = t.interval_amount || 1, u = UNITS[t.interval_unit] || UNITS.d;
-    if (t.interval_unit === 'h') return '每 ' + n + ' ' + u.label;
+    var n = t.interval_amount || 1;
+    if (t.interval_unit === 'h') return n === 1 ? '每小时' : '每 ' + n + ' 小时';
     var h = t.run_hour == null ? 9 : t.run_hour;
     var hh = pad(h) + ':00';
-    if (t.interval_unit === 'd') return '每 ' + n + ' ' + u.label + ' · ' + hh;
+    if (t.interval_unit === 'd') return (n === 1 ? '每天 ' : '每 ' + n + ' 天 ') + hh;
     var d = t.run_day == null ? 1 : t.run_day;
-    return '每 ' + n + ' ' + u.label + ' · ' + d + ' 日 ' + hh;
+    return (n === 1 ? '每月 ' : '每 ' + n + ' 个月 ') + d + ' 日 ' + hh;
   }
 
   function builtinName(key) {
@@ -155,19 +155,20 @@
 
   function taskCard(t) {
     var st = STATUS[t.last_status] || STATUS.never;
-    return '<div class="card task" data-id="' + t.id + '">' +
+    return '<div class="card task' + (t.enabled ? '' : ' task-disabled') + '" data-id="' + t.id + '">' +
       '<div class="task-main">' +
-      '<div class="task-name">' + esc(t.name) + '<span class="chip chip-script">' + esc(builtinName(t.script_key)) + '</span></div>' +
+      '<div class="task-head"><span class="task-name">' + esc(t.name) + '</span>' +
+      '<span class="chip chip-script">' + esc(builtinName(t.script_key)) + '</span></div>' +
       '<div class="task-meta">' + metaText(t) + '</div>' +
       '</div>' +
       '<div class="task-side">' +
-      '<span class="chip ' + st.cls + '">' + st.label + '</span>' +
+      '<span class="chip task-status ' + st.cls + '">' + st.label + '</span>' +
       '<label class="switch" title="启用/停用"><input type="checkbox" data-act="toggle"' + (t.enabled ? ' checked' : '') + '><span class="slider"></span></label>' +
       '<div class="task-actions">' +
-      '<button class="btn btn-sm" data-act="run" title="立即运行">' + ICONS.play + ' 运行</button>' +
-      '<button class="btn btn-sm" data-act="edit">' + ICONS.edit + ' 编辑</button>' +
-      '<button class="btn btn-sm" data-act="logs">' + ICONS.doc + ' 日志</button>' +
-      '<button class="btn btn-sm btn-danger-ghost" data-act="del">' + ICONS.trash + ' 删除</button>' +
+      '<button class="icon-btn" data-act="run" title="立即运行">' + ICONS.run + '</button>' +
+      '<button class="icon-btn" data-act="logs" title="日志">' + ICONS.doc + '</button>' +
+      '<button class="icon-btn" data-act="edit" title="编辑">' + ICONS.pen + '</button>' +
+      '<button class="icon-btn danger" data-act="del" title="删除">' + ICONS.trash + '</button>' +
       '</div></div></div>';
   }
 
@@ -184,8 +185,8 @@
     var meta = card.querySelector('.task-meta');
     if (meta) meta.innerHTML = metaText(t);
     var st = STATUS[t.last_status] || STATUS.never;
-    var chip = card.querySelector('.task-side .chip:not(.chip-script)');
-    if (chip) { chip.className = 'chip ' + st.cls; chip.textContent = st.label; }
+    var chip = card.querySelector('.task-status');
+    if (chip) { chip.className = 'chip task-status ' + st.cls; chip.textContent = st.label; }
     var sw = card.querySelector('input[data-act="toggle"]');
     if (sw) sw.checked = !!t.enabled;
     card.classList.toggle('task-disabled', !t.enabled);
@@ -204,7 +205,7 @@
       }
     }
     el.innerHTML = '共 ' + state.tasks.length + ' 个任务 · ' + enabled + ' 个已启用' +
-      (next ? ' · 下次运行 ' + fmtTime(next) : '');
+      (next ? ' · 下次 ' + fmtTime(next) : '');
   }
 
   // ---------- 视图：编辑器 ----------
@@ -299,9 +300,9 @@
     var day = Math.min(28, Math.max(1, parseInt($('#f-day').value, 10) || 1));
     var u = UNITS[unit] || UNITS.d;
     var text;
-    if (unit === 'h') text = '每 ' + n + ' 小时运行一次';
-    else if (unit === 'd') text = '每 ' + n + ' 天 · 北京时间 ' + pad(hour) + ':00 运行';
-    else text = '每 ' + n + ' 个月 · 每月 ' + day + ' 日 ' + pad(hour) + ':00 运行';
+    if (unit === 'h') text = (n === 1 ? '每小时' : '每 ' + n + ' 小时') + '运行一次';
+    else if (unit === 'd') text = (n === 1 ? '每天' : '每 ' + n + ' 天') + ' · 北京时间 ' + pad(hour) + ':00 运行';
+    else text = (n === 1 ? '每月' : '每 ' + n + ' 个月') + ' ' + day + ' 日 ' + pad(hour) + ':00（北京时间）运行';
     el.textContent = text;
   }
 
@@ -384,7 +385,7 @@
         for (var i = 0; i < logs.length; i++) {
           var l = logs[i];
           h += '<div class="log-line' + (l.level === 'error' ? ' log-err' : '') + '">' +
-            '<span class="log-ts">' + esc(fmtTime(l.ts)) + '</span>' +
+            '<span class="log-ts">' + esc(fmtTime(l.ts, true)) + '</span>' +
             '<span class="log-lv">' + esc(l.level) + '</span>' +
             '<span class="log-tx">' + esc(l.text) + '</span></div>';
         }

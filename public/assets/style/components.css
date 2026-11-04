@@ -53,6 +53,7 @@
   transition: background 0.15s, color 0.15s;
 }
 .icon-btn:hover { background: var(--bg-accent); color: var(--text); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ---------- 开关 ---------- */
 .switch { position: relative; display: inline-block; width: 36px; height: 20px; flex: none; }
@@ -178,6 +179,12 @@
   margin-bottom: 12px;
 }
 .modal-head-btns { display: flex; align-items: center; gap: 8px; }
+
+@media (max-width: 560px) {
+  .modal { padding: 14px; }
+  .modal-foot { flex-wrap: wrap; }
+  .modal-foot .btn { flex: 1 1 auto; justify-content: center; }
+}
 
 /* ---------- 日志弹层 ---------- */
 .logs {
