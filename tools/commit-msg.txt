@@ -1,7 +1,11 @@
-fix: surface relay error body + browser UA for MeoW relay
+feat: MeoW push multi-path fallback (relay POST -> relay GET -> direct)
 
-production test push got HTTP 403 from the relay; local replay was
-always 200. include the response body snippet in the error detail so
-the next failure tells us whether it is a WAF block page or MeoW's
-own error, and send a browser UA since the relay itself sits on
-Cloudflare and may filter Workers' default UA.
+the relay's Cloudflare WAF fingerprints requests and intermittently
+blocks Worker-originated POSTs (local replay always 200, production
+403 with empty body). meowPush now tries relay POST, then relay GET
+(different fingerprint, MeoW path format /nick/title/msg), then
+direct POST as a last resort; first success wins. error detail now
+carries each path's response body snippet (previous code consumed
+the body via res.json() so the fallback text() read was empty).
+adds tools/test-notify.mjs: 16 unit tests covering fallback order,
+body parsing, and error detail; wired into smoke.ps1 (37 total).
