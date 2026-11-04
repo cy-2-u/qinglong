@@ -63,8 +63,11 @@ foreach ($f in $files) {
 # null-valued properties entirely, which silently turned every deletion into a no-op.
 $deleteListFile = Join-Path $PSScriptRoot 'delete-list.txt'
 if (Test-Path $deleteListFile) {
+  # NOTE: ${baseTree} braces are mandatory — in PS 5.1 "$baseTree?recursive" parses
+  # '?recursive' into the variable name (404 body ends up as the only "path").
   $basePathSet = @{}
-  gh api "repos/$full/git/trees/$baseTree?recursive=1" --jq '.tree[].path' 2>$null | ForEach-Object { $basePathSet[$_] = $true }
+  gh api "repos/$full/git/trees/${baseTree}?recursive=1" --jq '.tree[].path' 2>$null | ForEach-Object { $basePathSet[$_] = $true }
+  if ($basePathSet.Count -lt 5) { Write-Output 'BASETREE_LIST_FAIL'; exit 1 }
   Get-Content $deleteListFile -Encoding UTF8 | ForEach-Object {
     $p = $_.Trim()
     if ($p -and -not $p.StartsWith('#')) {
