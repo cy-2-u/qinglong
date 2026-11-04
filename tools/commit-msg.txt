@@ -1,5 +1,7 @@
-feat: route MeoW push through down.nigx.cn relay
+fix: surface relay error body + browser UA for MeoW relay
 
-MeoW (api.chuckfang.com) blocks Cloudflare IP ranges, so pushes from
-the Worker never arrive. Relay prefix strips the scheme and forwards
-POST/JSON verbatim; verified end to end against the live API.
+production test push got HTTP 403 from the relay; local replay was
+always 200. include the response body snippet in the error detail so
+the next failure tells us whether it is a WAF block page or MeoW's
+own error, and send a browser UA since the relay itself sits on
+Cloudflare and may filter Workers' default UA.
