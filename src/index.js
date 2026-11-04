@@ -6,7 +6,7 @@
 //   *    /api/tasks[...]            任务 CRUD / 运行 / 日志
 //   *    /api/settings[...]         全局通知设置
 import { ensureReady } from './seed.js';
-import { getMeowNickname, meowPush, invalidateNickCache } from './notify.js';
+import { getNotifyKey, notifyPush, invalidateKeyCache } from './notify.js';
 import { initialNext, tzOffsetSec } from './nextrun.js';
 import { TaskScheduler } from './scheduler.js';
 import { BUILTINS } from './builtins.js';
@@ -217,25 +217,25 @@ async function route(request, env, url) {
 
   if (url.pathname === '/api/settings') {
     if (method === 'GET') {
-      const nick = await getMeowNickname(db);
-      return json({ meow_nickname: nick });
+      const key = await getNotifyKey(db);
+      return json({ notify_key: key });
     }
     if (method === 'PUT') {
       const body = await bodyJson(request);
-      const nick = String(body.meow_nickname || '').trim().slice(0, 100);
+      const key = String(body.notify_key || '').trim().slice(0, 100);
       await db.prepare(
-        "INSERT INTO settings (key, value) VALUES ('meow_nickname', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
-      ).bind(nick).run();
-      invalidateNickCache();
+        "INSERT INTO settings (key, value) VALUES ('notify_key', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+      ).bind(key).run();
+      invalidateKeyCache();
       return json({ ok: true });
     }
   }
 
   if (url.pathname === '/api/settings/test' && method === 'POST') {
     const body = await bodyJson(request);
-    let nick = String(body.nickname || '').trim();
-    if (!nick) nick = await getMeowNickname(db);
-    await meowPush(env, nick, '青龙面板', '测试推送：通知通道正常');
+    let key = String(body.notify_key || '').trim();
+    if (!key) key = await getNotifyKey(db);
+    await notifyPush(env, key, '青龙面板', '测试推送：通知通道正常');
     return json({ ok: true });
   }
 

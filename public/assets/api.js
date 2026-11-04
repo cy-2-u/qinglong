@@ -28,6 +28,6 @@
     getBuiltins: function () { return call('/builtins'); },
     getSettings: function () { return call('/settings'); },
     saveSettings: function (s) { return call('/settings', { method: 'PUT', body: JSON.stringify(s) }); },
-    testNotify: function (nick) { return call('/settings/test', { method: 'POST', body: JSON.stringify({ nickname: nick }) }); }
+    testNotify: function (key) { return call('/settings/test', { method: 'POST', body: JSON.stringify({ notify_key: key }) }); }
   };
 })();

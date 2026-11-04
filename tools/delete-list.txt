@@ -1,3 +1,7 @@
 # upload.ps1 上传时从 GitHub 仓库删除的路径（每行一个，# 开头为注释行）
-# 历史条目（9 个一次性脚本/演示文件）已全部从仓库移除并从本地清理；
-# 以后要删除仓库中的文件，把仓库相对路径加到这里即可。
+# 通知模块换代：MeoW 五通道兜底 + Vercel 反代整体移除，换成 TimelyNotify 直连。
+relay/api/meow/[[...path]].js
+relay/vercel.json
+relay/README.md
+tools/live-run.mjs
+tools/run-live.ps1

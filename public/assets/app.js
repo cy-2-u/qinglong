@@ -519,16 +519,16 @@
     );
   }
 
-  // ---------- 通知设置（全局 MeoW 推送） ----------
+  // ---------- 通知设置（TimelyNotify 推送） ----------
   async function actionSettings() {
     var s = await API.getSettings();
     openModal(
       '<div class="modal-head"><b>通知设置</b></div>' +
       '<div class="modal-body">' +
       '  <div class="field" style="margin-bottom:12px">' +
-      '    <label>MeoW 昵称</label>' +
-      '    <input id="setMeow" style="width:100%" placeholder="chuckfang.com 绑定的昵称" value="' + esc(s.meow_nickname || '') + '">' +
-      '    <div class="modal-hint">所有脚本的推送都发往该昵称；留空则不推送。</div>' +
+      '    <label>通知密钥</label>' +
+      '    <input id="setNotify" style="width:100%" placeholder="timelynotify.oicode.cn 推送地址中的密钥" value="' + esc(s.notify_key || '') + '">' +
+      '    <div class="modal-hint">所有脚本的推送都发往该密钥；留空则不推送。</div>' +
       '  </div>' +
       '</div>' +
       '<div class="modal-foot">' +
@@ -709,12 +709,12 @@
 
       case 'settings': actionSettings().catch(function (err) { toast('加载失败：' + err.message, 'fail'); }); break;
       case 'save-settings':
-        API.saveSettings({ meow_nickname: ($('#setMeow').value || '').trim() })
+        API.saveSettings({ notify_key: ($('#setNotify').value || '').trim() })
           .then(function () { closeModal(false); toast('已保存', 'ok'); })
           .catch(function (err) { toast('保存失败：' + err.message, 'fail'); });
         break;
       case 'test-notify':
-        API.testNotify(($('#setMeow').value || '').trim())
+        API.testNotify(($('#setNotify').value || '').trim())
           .then(function () { toast('测试推送已发送', 'ok'); })
           .catch(function (err) { toast('推送失败：' + err.message, 'fail'); });
         break;

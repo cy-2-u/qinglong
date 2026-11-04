@@ -1,6 +1,6 @@
 // DNSHE 免费子域名自动续期（内置库成员，移植自 reference/dnshe_renew_domains.py，接口依据官方 API 文档 V2.0）
 // 参数: api_key, api_secret
-// 流程：分页拉取全部子域名（含完整性校验）→ 按阈值判定 → 逐个续期 → 明细写日志 → 摘要推送（全局 MeoW）。
+// 流程：分页拉取全部子域名（含完整性校验）→ 按阈值判定 → 逐个续期 → 明细与摘要写日志。
 // 注意：免费版 Worker 单次调用最多 50 个子请求；域名较多时列表页 + 续期请求数要留意。
 export async function run(ctx) {
   const P = ctx.params || {};

@@ -1,7 +1,7 @@
 // 任务执行器：按 script_key 调用内置库 → 注入 ctx → 限时执行 → 日志落 D1 → 推进 next_run_at。
 // 注意：Workers 运行时禁止字符串编译（new Function/eval），脚本一律来自打包的内置库模块。
 import { ensureReady } from './seed.js';
-import { getMeowNickname, meowPush } from './notify.js';
+import { getNotifyKey, notifyPush } from './notify.js';
 import { advanceNext, nextDailyAnchor, nextMonthlyAnchor, tzOffsetSec } from './nextrun.js';
 import { BUILTINS } from './builtins.js';
 
@@ -74,7 +74,7 @@ async function runOne(env, task, isManual) {
   }
 
   try {
-    const nick = await getMeowNickname(db);
+    const key = await getNotifyKey(db);
     let notifyCount = 0;
     const ctx = {
       params: parseParams(task.params),
@@ -84,10 +84,10 @@ async function runOne(env, task, isManual) {
           pushLog('info', '推送次数超过上限（' + MAX_NOTIFY + ' 次），跳过');
           return;
         }
-        if (!nick) { pushLog('info', '未配置全局通知，跳过推送'); return; }
+        if (!key) { pushLog('info', '未配置通知密钥，跳过推送'); return; }
         try {
-          await meowPush(env, nick, title, content);
-          pushLog('info', 'MeoW 推送成功');
+          await notifyPush(env, key, title, content);
+          pushLog('info', '通知推送成功');
         } catch (e) {
           pushLog('error', '推送失败: ' + ((e && e.message) || e));
         }

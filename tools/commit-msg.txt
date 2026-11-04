@@ -1,7 +1,11 @@
-feat: Vercel relay as primary MeoW path (5-path fallback)
+feat: swap notification module to TimelyNotify direct GET
 
-self-hosted relay on Vercel (relay/ dir, relay-nu-seven.vercel.app)
-has no third-party WAF quirks; inserted as paths 1-2 (POST + GET),
-down.nigx.cn demoted to 3-4, direct as 5. note: *.vercel.app DNS is
-poisoned on CN networks but the Worker resolves from CF edge fine.
-test-notify.mjs extended to 21 tests covering the new order.
+MeoW blocked CF Worker egress; the five-path fallback + Vercel relay
+chain is removed entirely (relay/ dir deleted, project removed from
+Vercel). TimelyNotify (timelynotify.oicode.cn) accepts any egress IP,
+so notify.js is a single direct GET path: /{key}/{title}/{body}?
+group=qinglong with per-segment encoding. settings key renamed
+meow_nickname -> notify_key (no auto migration; re-enter the key in
+the panel once). task scripts keep pushing summaries via ctx.notify;
+mock tests updated, new test-notify.mjs (6 tests, zero real requests).
+one-shot real push verified manually (single request only).

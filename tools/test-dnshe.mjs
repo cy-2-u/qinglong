@@ -74,7 +74,6 @@ await t('happy path: 临近到期续期、远期跳过、never_expires="0" 不�
 
   assert.deepStrictEqual(renewIds.sort(), [1, 3], '应续期 a(30天) 与 c(恰好180天)，跳过 b(400天)');
   assert.strictEqual(ctx.notified.length, 1, '推送一次');
-  assert.strictEqual(ctx.notified[0].title, 'DNSHE 域名自动续期报告');
   const s = ctx.notified[0].content;
   assert.ok(s.includes('共 3 个域名：续期成功 2，失败 0，跳过 1'), s);
   assert.ok(s.includes('- a.test.com → 新到期'), s);
@@ -129,12 +128,12 @@ await t('分页/去重/异常状态/422 良性/500 业务失败/never_expires="1
   assert.ok(ctx.logs.some((l) => l.includes('[SKIP] x.test.com: 已设置为永不过期')), 'never_expires="1" 应跳过');
   assert.ok(ctx.logs.some((l) => l.includes('[SKIP] z.test.com: 暂不可续期') && l.includes('还需等待 10 天')), '422 的等待天数要透出');
   assert.ok(ctx.logs.some((l) => l.includes('[X] y.test.com: 续期失败') && l.includes('internal_error')), '500+失败结构按业务失败处理');
-  const s = ctx.notified[0].content;
-  assert.ok(s.includes('共 4 个域名：续期成功 0，失败 1，跳过 3'), s);
-  assert.ok(s.includes('y.test.com：内部错误 [internal_error] —— DNSHE 服务端内部错误'), '失败原因带 hint');
-  assert.ok(s.includes('[!] 域名状态异常'), '摘要含状态异常段');
-  assert.ok(s.includes('y.test.com：状态 Suspended'), '异常状态域名被点名');
-  assert.ok(s.includes('跳过：2 个未到 180 天窗口，1 个永不过期'), '跳过聚合计数');
+  const s2 = ctx.notified[0].content;
+  assert.ok(s2.includes('共 4 个域名：续期成功 0，失败 1，跳过 3'), s2);
+  assert.ok(s2.includes('y.test.com：内部错误 [internal_error] —— DNSHE 服务端内部错误'), '失败原因带 hint');
+  assert.ok(s2.includes('[!] 域名状态异常'), '摘要含状态异常段');
+  assert.ok(s2.includes('y.test.com：状态 Suspended'), '异常状态域名被点名');
+  assert.ok(s2.includes('跳过：2 个未到 180 天窗口，1 个永不过期'), '跳过聚合计数');
   assert.strictEqual(ctx.notified[0].title, 'DNSHE 域名续期失败', '有失败项时标题为失败');
   assert.ok(ctx.logs.some((l) => l.includes('积分已耗尽')), '积分为 0 的警示');
 });

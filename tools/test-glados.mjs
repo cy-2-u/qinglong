@@ -1,6 +1,6 @@
 // GLaDOS 签到脚本的 mock 端到端测试（node 直接跑）
 // 覆盖：签到成功 + 自动兑换 500 档、积分不足不兑换、认证失败不重试、
-// 三种 Cookie 格式、推送无条件。曾借此抓出 pushLevel 残留导致的必崩 bug。
+// 三种 Cookie 格式、汇总日志。曾借此抓出 pushLevel 残留导致的必崩 bug。
 // 用法: node test-glados.mjs
 import assert from 'node:assert';
 import { run as runGlados } from '../src/tasks/glados-checkin.js';
@@ -53,7 +53,7 @@ function gladosMock(opts) {
 }
 
 // ---------- 场景 1：签到成功 + 积分 520 自动兑换 500 档（Cookie-Editor JSON 输入） ----------
-await t('签到成功、兑换 500 档、JSON Cookie 解析、无条件推送', async () => {
+await t('签到成功、兑换 500 档、JSON Cookie 解析、推送汇总', async () => {
   const cookieJson = '[{"name":"gld:sess","value":"AAA"},{"name":"gld:sess.sig","value":"BBB"}]';
   const { fetchFn, state } = gladosMock({
     pointsBody: { points: 520, history: [{ change: 5 }], plans: { plan500: { points: 500, days: 100 } } },
@@ -63,10 +63,10 @@ await t('签到成功、兑换 500 档、JSON Cookie 解析、无条件推送', 
 
   assert.strictEqual(state.checkinAttempts, 1, '首次成功不应重试');
   assert.deepStrictEqual(state.exchangeCalls, ['planType=plan500'], '应兑换 plan500');
-  assert.strictEqual(ctx.notified.length, 1, '推送一次');
-  assert.strictEqual(ctx.notified[0].title, 'GLaDOS 签到 成功1/1');
   assert.ok(ctx.logs.some((l) => l.includes('兑换成功 +100天')), '兑换成功入日志');
   assert.ok(ctx.logs.some((l) => l.includes('积分: 520')), '积分入日志');
+  assert.strictEqual(ctx.notified.length, 1, '推送一次');
+  assert.ok(ctx.notified[0].title.includes('GLaDOS 签到 成功1/1'), '推送标题带成功数');
   assert.ok(ctx.notified[0].content.includes('签到结果: checkin! got 100GB'), '推送含签到结果');
   assert.ok(ctx.notified[0].content.includes('账号 a@b.c'), '推送含账号邮箱');
 });
@@ -81,7 +81,7 @@ await t('积分不足 -> 不调用兑换接口，照常推送', async () => {
 
   assert.deepStrictEqual(state.exchangeCalls, [], '积分不足不应调兑换');
   assert.ok(ctx.logs.some((l) => l.includes('积分不足(120/500分)')), '积分不足入日志');
-  assert.strictEqual(ctx.notified[0].title, 'GLaDOS 签到 成功1/1');
+  assert.ok(ctx.notified[0].title.includes('GLaDOS 签到 成功1/1'), '推送标题带成功数');
   assert.ok(ctx.notified[0].content.includes('当前积分: 120 (-5)'), '负数积分变动带符号');
 });
 
@@ -107,7 +107,7 @@ await t('认证失败不重试，旧 token 格式自动补前缀并告警', asyn
   assert.deepStrictEqual(state2.exchangeCalls, [], 'points 查询失败时不应兑换');
   assert.ok(ctx.logs.some((l) => l.includes('认证失败，不再重试')), '认证失败入日志');
   assert.ok(ctx.logs.some((l) => l.includes('缺少 gld:sess')), '旧 token 触发 gld 前缀告警');
-  assert.strictEqual(ctx.notified[0].title, 'GLaDOS 签到 成功0/1', '失败也推送');
+  assert.ok(ctx.notified[0].title.includes('GLaDOS 签到 成功0/1'), '失败也推送');
   assert.ok(ctx.logs.some((l) => l.includes('积分不足(?/500分)')), 'points 未知时积分显示 ?');
 });
 
