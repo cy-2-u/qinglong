@@ -1,7 +1,7 @@
 // nextrun.js 调度数学的单元测试（node 直接跑，无 workerd 依赖）
 // 用法: node test-nextrun.mjs
 import assert from 'node:assert';
-import { nextDailyAnchor, nextMonthlyAnchor, advanceNext, initialNext } from '../src/nextrun.js';
+import { nextDailyAnchor, nextMonthlyAnchor, advanceNext, initialNext, computeNext, healedAnchor } from '../src/nextrun.js';
 
 const TZ = 8 * 3600;
 const DAY = 86400;
@@ -88,6 +88,54 @@ t('monthly: 1 月 31 日 + 1 月 = 2 月末（锚点 31 号、run_day 28 以内�
   const now = bj(2026, 1, 29, 12);
   const task = { interval_unit: 'm', interval_amount: 1, run_hour: 9, run_day: 28 };
   assert.strictEqual(advanceNext(task, anchor, now, TZ), bj(2026, 2, 28, 9));
+});
+
+// ---- computeNext：单次天/月任务从规则锚点重算（自愈），其余走锚点推进 ----
+t('computeNext: 单次日任务走规则锚点（漂移被拉回）', () => {
+  const now = bj(2026, 10, 31, 10);
+  const task = { interval_unit: 'd', interval_amount: 1, run_hour: 9 };
+  // 旧锚点漂移到 08:00 也不影响：结果严格按规则 = 明天 9 点
+  assert.strictEqual(computeNext(task, bj(2026, 10, 31, 8), now, TZ), bj(2026, 11, 1, 9));
+});
+t('computeNext: 每 3 天任务走锚点推进', () => {
+  const anchor = bj(2026, 10, 20, 9);
+  const now = bj(2026, 10, 20, 10);
+  const task = { interval_unit: 'd', interval_amount: 3, run_hour: 9 };
+  assert.strictEqual(computeNext(task, anchor, now, TZ), bj(2026, 10, 23, 9));
+});
+t('computeNext: 小时任务走锚点推进', () => {
+  const anchor = bj(2026, 10, 31, 0);
+  const now = bj(2026, 10, 31, 1);
+  const task = { interval_unit: 'h', interval_amount: 6 };
+  assert.strictEqual(computeNext(task, anchor, now, TZ), bj(2026, 10, 31, 6));
+});
+t('computeNext: 单次月任务走规则锚点', () => {
+  const now = bj(2026, 10, 31, 12);
+  const task = { interval_unit: 'm', interval_amount: 1, run_hour: 9, run_day: 1 };
+  assert.strictEqual(computeNext(task, bj(2026, 10, 1, 9), now, TZ), bj(2026, 11, 1, 9));
+});
+
+// ---- healedAnchor：心跳期漂移纠正 ----
+t('healedAnchor: 漂移的单次日任务给纠正值', () => {
+  const now = bj(2026, 10, 31, 10);
+  const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 11, 1, 8) };
+  assert.strictEqual(healedAnchor(task, now, TZ), bj(2026, 11, 1, 9));
+});
+t('healedAnchor: 锚点正确返回 null', () => {
+  const now = bj(2026, 10, 31, 10);
+  const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) };
+  assert.strictEqual(healedAnchor(task, now, TZ), null);
+});
+t('healedAnchor: 已到期的任务不碰（交给执行路径）', () => {
+  const now = bj(2026, 10, 31, 10);
+  const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 10, 31, 9) };
+  assert.strictEqual(healedAnchor(task, now, TZ), null);
+});
+t('healedAnchor: 多天/停用/小时任务一律不碰', () => {
+  const now = bj(2026, 10, 31, 10);
+  assert.strictEqual(healedAnchor({ enabled: 1, interval_unit: 'd', interval_amount: 3, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) }, now, TZ), null);
+  assert.strictEqual(healedAnchor({ enabled: 0, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) }, now, TZ), null);
+  assert.strictEqual(healedAnchor({ enabled: 1, interval_unit: 'h', interval_amount: 1, next_run_at: now + 3600 }, now, TZ), null);
 });
 
 console.log('\nALL ' + passed + ' TESTS PASSED');

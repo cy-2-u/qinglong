@@ -82,3 +82,28 @@ export function initialNext(task, nowSec, tzOff) {
   }
   return nextMonthlyAnchor(task.run_day == null ? 1 : task.run_day, task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
 }
+
+// 执行后统一推进：单次天/月任务的下一锚点完全由规则决定（自愈式），不再依赖
+// 旧锚点连加，从根上消除累积漂移；多天/小时/多月仍走锚点推进（advanceNext）。
+export function computeNext(task, prevAnchor, nowSec, tzOff) {
+  const n = Math.max(1, task.interval_amount | 0);
+  if (n === 1 && task.interval_unit === 'd') {
+    return nextDailyAnchor(task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
+  }
+  if (n === 1 && task.interval_unit === 'm') {
+    return nextMonthlyAnchor(task.run_day == null ? 1 : task.run_day, task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
+  }
+  return advanceNext(task, prevAnchor, nowSec, tzOff);
+}
+
+// 心跳期漂移自愈：单次天/月任务若 next_run_at 与规则锚点不符（时钟回拨、
+// 手动改库、历史版本写入的漂移值），返回纠正值；一致或不宜触碰返回 null。
+export function healedAnchor(task, nowSec, tzOff) {
+  if (!task.enabled || task.interval_amount !== 1) return null;
+  if (task.interval_unit !== 'd' && task.interval_unit !== 'm') return null;
+  if (!(task.next_run_at > nowSec)) return null; // 已到期 → 交给执行路径，不抢
+  const correct = task.interval_unit === 'd'
+    ? nextDailyAnchor(task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff)
+    : nextMonthlyAnchor(task.run_day == null ? 1 : task.run_day, task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
+  return correct !== task.next_run_at ? correct : null;
+}

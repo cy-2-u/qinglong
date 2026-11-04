@@ -1,0 +1,239 @@
+/* 组件层：按钮、开关、分段、下拉、弹窗、toast、光标提示、徽章。 */
+
+/* ---------- 按钮 ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--card-soft); border-color: var(--border-strong); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+.btn-primary:hover { background: var(--primary-strong); border-color: var(--primary-strong); }
+
+.btn-danger {
+  background: var(--err);
+  border-color: var(--err);
+  color: #fff;
+}
+.btn-danger:hover { filter: brightness(0.92); }
+
+.btn-danger-ghost { color: var(--err); }
+.btn-danger-ghost:hover { background: var(--err-soft); border-color: var(--err-soft); }
+
+.btn-sm { padding: 4px 10px; font-size: 12.5px; }
+.btn-block { width: 100%; justify-content: center; }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.icon-btn:hover { background: var(--bg-accent); color: var(--text); }
+
+/* ---------- 开关 ---------- */
+.switch { position: relative; display: inline-block; width: 36px; height: 20px; flex: none; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: var(--border-strong);
+  transition: background 0.18s;
+  cursor: pointer;
+}
+.switch .slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.switch input:checked + .slider { background: var(--primary); }
+.switch input:checked + .slider::before { transform: translateX(16px); }
+
+/* ---------- 下拉 ---------- */
+.dd { position: relative; display: inline-block; }
+.dd-head {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 130px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.dd-head:hover { border-color: var(--border-strong); }
+.dd-arrow { font-size: 10px; color: var(--text-soft); }
+.dd-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  z-index: 60;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in 0.12s ease-out;
+}
+.dd.open .dd-menu { display: block; }
+.dd-item {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dd-item:hover { background: var(--bg-accent); }
+.dd-item.sel { color: var(--primary); font-weight: 600; }
+
+/* ---------- 徽章 ---------- */
+.chip {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip-script { background: var(--info-soft); color: var(--text-soft); }
+.status-ok { background: var(--ok-soft); color: var(--ok); }
+.status-failed { background: var(--err-soft); color: var(--err); }
+.status-running { background: var(--running-soft); color: var(--running); }
+.status-never { background: var(--bg-accent); color: var(--text-soft); }
+
+/* ---------- 弹窗 ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 27, 20, 0.45);
+  animation: fade-in 0.15s ease-out;
+}
+.modal {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in 0.15s ease-out;
+}
+.modal-confirm { text-align: left; }
+.modal-confirm h3 { margin-bottom: 8px; }
+.modal-confirm p { color: var(--text-soft); }
+.modal-confirm .modal-foot { margin-top: 18px; }
+.modal-foot { display: flex; justify-content: flex-end; gap: 10px; }
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal-head-btns { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- 日志弹层 ---------- */
+.logs {
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-soft);
+  font-family: var(--mono);
+  font-size: 12px;
+  min-height: 200px;
+  max-height: 55vh;
+}
+.log-line { display: flex; gap: 10px; padding: 2.5px 0; }
+.log-ts { color: var(--text-faint); flex: none; }
+.log-lv { flex: none; width: 38px; color: var(--text-soft); }
+.log-err .log-tx, .log-err .log-lv { color: var(--err); }
+
+/* ---------- toast ---------- */
+#toasts {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  box-shadow: var(--shadow-pop);
+  animation: toast-in 0.2s ease-out;
+}
+.toast-ok { background: var(--ok); color: #fff; }
+.toast-err { background: var(--err); color: #fff; }
+.toast-out { opacity: 0; transition: opacity 0.3s; }
+
+/* ---------- 光标提示 ---------- */
+.qtip {
+  position: fixed;
+  z-index: 300;
+  max-width: 260px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.qtip.show { opacity: 1; }

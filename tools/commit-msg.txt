@@ -1,11 +1,13 @@
-feat: swap notification module to TimelyNotify direct GET
+refactor: panel rewrite - drop legacy notify paths, split frontend, self-healing anchors
 
-MeoW blocked CF Worker egress; the five-path fallback + Vercel relay
-chain is removed entirely (relay/ dir deleted, project removed from
-Vercel). TimelyNotify (timelynotify.oicode.cn) accepts any egress IP,
-so notify.js is a single direct GET path: /{key}/{title}/{body}?
-group=qinglong with per-segment encoding. settings key renamed
-meow_nickname -> notify_key (no auto migration; re-enter the key in
-the panel once). task scripts keep pushing summaries via ctx.notify;
-mock tests updated, new test-notify.mjs (6 tests, zero real requests).
-one-shot real push verified manually (single request only).
+- notify: TimelyNotify direct GET only; remove MeoW relay chains and Vercel proxy leftovers
+- auth: extract HMAC cookie session into auth.js; Secure flag follows request protocol
+- scheduling: computeNext re-derives anchors from rule for 1-day/1-month tasks;
+  healedAnchor corrects drifted next_run_at during heartbeat
+- seed: drop script_code column and migration block (schema is script_key-only)
+- frontend: split into api.js / components.js / app.js + 4-file CSS;
+  30s refresh patches cards in place instead of full re-render
+- runner: notify gate logs when key unset; manual runs keep schedule untouched
+- upload: fix silent remote-delete no-op (PS5.1 ConvertTo-Json drops null sha);
+  delete entries spliced as raw JSON literals
+- repo cleanup: delete-list for relay/, mock.js, serve.mjs, src/scripts/, debug tooling

@@ -1,0 +1,88 @@
+/* 设计令牌：暖米底 + 橙红主色的 Claude 风格面板变量，含暗色与动画帧。 */
+
+:root {
+  /* 画布与卡片 */
+  --bg: #f5f2ec;
+  --bg-accent: #ece7dd;
+  --card: #fffdf9;
+  --card-soft: #faf7f1;
+  --border: #e3ddd0;
+  --border-strong: #d4ccbb;
+
+  /* 文本 */
+  --text: #3d3929;
+  --text-soft: #87806c;
+  --text-faint: #b0a992;
+
+  /* 主色（陶土橙） */
+  --primary: #d97757;
+  --primary-strong: #c25f3c;
+  --primary-soft: #f6e3d9;
+  --on-primary: #fff8f3;
+
+  /* 状态 */
+  --ok: #4d7c43;
+  --ok-soft: #e4efdf;
+  --err: #b3402f;
+  --err-soft: #f7e2dc;
+  --warn: #a8700f;
+  --warn-soft: #f5ecd4;
+  --info-soft: #e5e9ee;
+  --running: #7a6a54;
+  --running-soft: #efe9de;
+
+  /* 几何 */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(61, 57, 41, 0.06), 0 4px 16px rgba(61, 57, 41, 0.07);
+  --shadow-pop: 0 8px 28px rgba(61, 57, 41, 0.18);
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html.dark {
+  --bg: #262624;
+  --bg-accent: #1f1f1d;
+  --card: #30302d;
+  --card-soft: #2a2a27;
+  --border: #3e3d39;
+  --border-strong: #4c4a44;
+
+  --text: #e8e4d9;
+  --text-soft: #a29b8a;
+  --text-faint: #6f6a5c;
+
+  --primary: #d97757;
+  --primary-strong: #e08a6d;
+  --primary-soft: #4a352b;
+  --on-primary: #fff4ec;
+
+  --ok: #8fbf82;
+  --ok-soft: #2e3a2a;
+  --err: #e08a76;
+  --err-soft: #46291f;
+  --warn: #d0a44c;
+  --warn-soft: #3d3520;
+  --info-soft: #34342f;
+  --running: #c0b49a;
+  --running-soft: #38352e;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

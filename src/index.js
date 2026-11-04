@@ -1,25 +1,27 @@
-// Worker 入口：面板静态资源之外的 API 路由 + cron 看门狗。
+// Worker 入口：API 路由 + cron 看门狗。
 // 路由：
-//   GET  /health                    公开，自暴露状态并给 DO 上弦
-//   POST /api/login                 登录（PANEL_PASSWORD），下发签名 Cookie
-//   GET  /api/health                公开探测（面板 api.js 用）
-//   *    /api/tasks[...]            任务 CRUD / 运行 / 日志
-//   *    /api/settings[...]         全局通知设置
+//   GET  /health                公开，自暴露状态并给 DO 上弦
+//   POST /api/login             登录（PANEL_PASSWORD），下发签名 Cookie
+//   GET  /api/health            公开探测（面板 api.js 用）
+//   *    /api/tasks[...]        任务 CRUD / 运行 / 日志
+//   *    /api/settings[...]     全局通知设置
+//   GET  /api/builtins          内置任务库清单
 import { ensureReady } from './seed.js';
 import { getNotifyKey, notifyPush, invalidateKeyCache } from './notify.js';
 import { initialNext, tzOffsetSec } from './nextrun.js';
 import { TaskScheduler } from './scheduler.js';
 import { BUILTINS } from './builtins.js';
+import { issueCookie, sessionCookieHeader, validSession, getSessionCookie, safeEqual } from './auth.js';
 
 export { TaskScheduler };
 
-const SESSION_TTL = 30 * 86400;
-const enc = new TextEncoder();
-
-function json(body, status) {
+function json(body, status, extraHeaders) {
   return new Response(JSON.stringify(body), {
     status: status || 200,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    headers: Object.assign({
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+    }, extraHeaders || {}),
   });
 }
 
@@ -34,53 +36,12 @@ function schedulerStub(env) {
   return env.SCHEDULER.get(env.SCHEDULER.idFromName('default'));
 }
 
-// ---------- 鉴权：HMAC 签名 Cookie（ql_sess=exp.sig） ----------
-function b64url(buf) {
-  let s = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
-  return s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-async function hmacSign(password, msg) {
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode('ql:' + password),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
-  return b64url(await crypto.subtle.sign('HMAC', key, enc.encode(msg)));
-}
-
-async function safeEqual(a, b) {
-  const da = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(String(a))));
-  const db = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(String(b))));
-  if (crypto.subtle.timingSafeEqual) return crypto.subtle.timingSafeEqual(da, db);
-  let d = 0;
-  for (let i = 0; i < da.length; i++) d |= da[i] ^ db[i];
-  return d === 0;
-}
-
-async function issueCookie(env) {
-  const exp = String(Math.floor(Date.now() / 1000) + SESSION_TTL);
-  return exp + '.' + (await hmacSign(env.PANEL_PASSWORD, exp));
-}
-
-async function validSession(env, value) {
-  if (!value || !env.PANEL_PASSWORD) return false;
-  const i = value.indexOf('.');
-  if (i <= 0) return false;
-  const exp = value.slice(0, i), sig = value.slice(i + 1);
-  if (!/^\d+$/.test(exp) || Number(exp) < Date.now() / 1000) return false;
-  return safeEqual(await hmacSign(env.PANEL_PASSWORD, exp), sig);
-}
-
-function getSessionCookie(request) {
-  const m = /(?:^|;\s*)ql_sess=([^;]+)/.exec(request.headers.get('cookie') || '');
-  return m ? decodeURIComponent(m[1]) : '';
-}
-
 // ---------- 任务字段校验 ----------
 const UNIT_MAX = { h: 23, d: 30, m: 12 };
 
 function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 
+// POST/PUT 共用：请求体 → 合法任务字段。未知内置脚本/超限参数在此拒绝。
 function normalizeTask(body) {
   const unit = ['h', 'd', 'm'].includes(body.interval_unit) ? body.interval_unit : 'd';
   const name = String(body.name || '').trim().slice(0, 100);
@@ -91,9 +52,8 @@ function normalizeTask(body) {
   if (params.length > 65536) throw new HttpError('参数过大（上限 64KB）');
   return {
     name,
-    script_key: script_key,
-    script_code: '',           // 旧列保留兼容，现已不再存放脚本文本
-    params: params,
+    script_key,
+    params,
     interval_unit: unit,
     interval_amount: clamp(Math.round(Number(body.interval_amount)) || 1, 1, UNIT_MAX[unit]),
     run_hour: unit === 'h' ? null : clamp(Math.round(Number(body.run_hour)) || 0, 0, 23),
@@ -108,6 +68,8 @@ function scheduleChanged(a, b) {
     a.run_hour !== b.run_hour ||
     a.run_day !== b.run_day;
 }
+
+const TASK_COLS = 'id, name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_day, last_run_at, last_status, next_run_at';
 
 // API 契约：params 一律以对象返回（D1 里存的是 JSON 字符串，原样返回会被
 // 前端 Object.keys 逐字符拆开）。解析失败回退为空对象，绝不抛错。
@@ -125,6 +87,10 @@ async function bodyJson(request) {
   return b;
 }
 
+async function getTask(db, id) {
+  return db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
+}
+
 // ---------- 路由 ----------
 async function route(request, env, url) {
   const method = request.method;
@@ -137,11 +103,9 @@ async function route(request, env, url) {
     if (!env.PANEL_PASSWORD) throw new HttpError('服务端未设置 PANEL_PASSWORD', 500);
     const body = await bodyJson(request);
     if (!(await safeEqual(body.password || '', env.PANEL_PASSWORD))) throw new HttpError('密码错误', 401);
-    const cookie = 'ql_sess=' + encodeURIComponent(await issueCookie(env)) +
-      '; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=' + SESSION_TTL;
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { 'content-type': 'application/json; charset=utf-8', 'set-cookie': cookie },
-    });
+    // 本地 wrangler dev 是 http，Secure cookie 无法回传；生产 https 恒为 Secure
+    const secure = url.protocol === 'https:';
+    return json({ ok: true }, 200, { 'set-cookie': sessionCookieHeader(await issueCookie(env), secure) });
   }
 
   // ----- 鉴权 -----
@@ -155,17 +119,16 @@ async function route(request, env, url) {
     const sub = m[2] || null;
 
     if (!id && method === 'GET') {
-      const { results } = await db.prepare('SELECT * FROM tasks ORDER BY id').all();
+      const { results } = await db.prepare('SELECT ' + TASK_COLS + ' FROM tasks ORDER BY id').all();
       return json({ tasks: (results || []).map(toClientTask) });
     }
     if (!id && method === 'POST') {
       const t = normalizeTask(await bodyJson(request));
       const next = initialNext(t, Math.floor(Date.now() / 1000), tzOffsetSec(env));
       const res = await db.prepare(
-        'INSERT INTO tasks (name, enabled, script_key, script_code, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
-      ).bind(t.name, t.enabled, t.script_key, t.script_code, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
-      const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(res.meta.last_row_id).first();
-      return json({ task: toClientTask(task) });
+        'INSERT INTO tasks (name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?)'
+      ).bind(t.name, t.enabled, t.script_key, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
+      return json({ task: toClientTask(await getTask(db, res.meta.last_row_id)) });
     }
     if (id && sub === 'run' && method === 'POST') {
       const status = await schedulerStub(env).runTask(id);
@@ -178,23 +141,21 @@ async function route(request, env, url) {
       return json({ logs: results || [] });
     }
     if (id && method === 'PUT') {
-      const old = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
+      const old = await getTask(db, id);
       if (!old) throw new HttpError('任务不存在', 404);
       const t = normalizeTask(await bodyJson(request));
       const next = scheduleChanged(old, t)
         ? initialNext(t, Math.floor(Date.now() / 1000), tzOffsetSec(env))
         : old.next_run_at;
       await db.prepare(
-        'UPDATE tasks SET name=?, enabled=?, script_key=?, script_code=?, params=?, interval_amount=?, interval_unit=?, run_hour=?, run_day=?, next_run_at=? WHERE id=?'
-      ).bind(t.name, t.enabled, t.script_key, t.script_code, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next, id).run();
-      const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
-      return json({ task: toClientTask(task) });
+        'UPDATE tasks SET name=?, enabled=?, script_key=?, params=?, interval_amount=?, interval_unit=?, run_hour=?, run_day=?, next_run_at=? WHERE id=?'
+      ).bind(t.name, t.enabled, t.script_key, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next, id).run();
+      return json({ task: toClientTask(await getTask(db, id)) });
     }
     if (id && method === 'PATCH') {
       const body = await bodyJson(request);
       await db.prepare('UPDATE tasks SET enabled=? WHERE id=?').bind(body.enabled ? 1 : 0, id).run();
-      const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
-      return json({ task: toClientTask(task) });
+      return json({ task: toClientTask(await getTask(db, id)) });
     }
     if (id && method === 'DELETE') {
       await db.batch([

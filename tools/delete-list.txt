@@ -1,7 +1,15 @@
 # upload.ps1 上传时从 GitHub 仓库删除的路径（每行一个，# 开头为注释行）
-# 通知模块换代：MeoW 五通道兜底 + Vercel 反代整体移除，换成 TimelyNotify 直连。
+# ---- 通知模块换代遗留（MeoW 五通道 + Vercel 反代 -> TimelyNotify 直连）----
 relay/api/meow/[[...path]].js
 relay/vercel.json
 relay/README.md
 tools/live-run.mjs
 tools/run-live.ps1
+# ---- 面板重写前的旧文件 ----
+public/assets/mock.js
+tools/serve.mjs
+tools/debug-commit.ps1
+src/scripts/dnshe-renew.txt
+src/scripts/glados-checkin.txt
+# ---- relay 目录残留（若 .vercel 项目配置曾被推上去）----
+relay/.gitignore

@@ -39,7 +39,7 @@ $baseTree = gh api "repos/$full/git/commits/$headSha" --jq '.tree.sha' 2>$null
 if ($LASTEXITCODE -ne 0 -or -not $baseTree) { Write-Output 'BASETREE_FAIL'; exit 1 }
 
 # ---------- 3) collect files ----------
-$excludeDirs = @('node_modules', '.wrangler', '.git')
+$excludeDirs = @('node_modules', '.wrangler', '.git', '_restore')
 $files = Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
   $rel = $_.FullName.Substring($root.Length + 1)
   $parts = $rel.Split('\')
@@ -50,14 +50,17 @@ $files = Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
 Write-Output ("FILES: " + $files.Count)
 
 $entries = @()
+$rawDeletes = @()   # raw JSON literals for deletions (sha:null) — see block below
 foreach ($f in $files) {
   $rel = $f.FullName.Substring($root.Length + 1).Replace('\', '/')
   $content = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
   $entries += [PSCustomObject]@{ path = $rel; mode = '100644'; type = 'blob'; content = $content }
 }
 
-# paths listed in delete-list.txt are removed from the repo (sha=null deletes the entry);
-# skip paths already absent from the base tree (GitHub rejects deleting nonexistent entries)
+# paths listed in delete-list.txt are removed from the repo (sha:null deletes the entry);
+# skip paths already absent from the base tree (GitHub rejects deleting nonexistent entries).
+# NOTE: delete entries are emitted as raw JSON literals — PS 5.1 ConvertTo-Json drops
+# null-valued properties entirely, which silently turned every deletion into a no-op.
 $deleteListFile = Join-Path $PSScriptRoot 'delete-list.txt'
 if (Test-Path $deleteListFile) {
   $basePathSet = @{}
@@ -66,7 +69,7 @@ if (Test-Path $deleteListFile) {
     $p = $_.Trim()
     if ($p -and -not $p.StartsWith('#')) {
       if ($basePathSet.ContainsKey($p.Replace('\', '/'))) {
-        $entries += [PSCustomObject]@{ path = $p.Replace('\', '/'); mode = '100644'; type = 'blob'; sha = $null }
+        $script:rawDeletes += '{"path":"' + $p.Replace('\', '/') + '","mode":"100644","type":"blob","sha":null}'
         Write-Output ("DELETE_REMOTE: " + $p)
       } else {
         Write-Output ("DELETE_SKIP (not in base tree): " + $p)
@@ -77,6 +80,13 @@ if (Test-Path $deleteListFile) {
 
 $treeObj = @{ base_tree = $baseTree; tree = $entries }
 $treeBody = $treeObj | ConvertTo-Json -Depth 4
+if ($rawDeletes.Count -gt 0) {
+  # splice raw delete entries into the serialized tree array:
+  # "tree": [ ...converted entries... ]  ->  append ,<raw1>,<raw2>...
+  $joined = $treeBody -replace '"tree":\s*\[', ('"tree": [' + ($rawDeletes -join ',') + ',')
+  if ($joined -eq $treeBody) { Write-Output 'TREE_SPLICE_FAIL'; exit 1 }
+  $treeBody = $joined
+}
 $jsonTree = Join-Path $env:TEMP 'ql_tree.json'
 [System.IO.File]::WriteAllText($jsonTree, $treeBody, (New-Object System.Text.UTF8Encoding($false)))
 

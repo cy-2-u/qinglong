@@ -16,7 +16,7 @@ node (Join-Path $PSScriptRoot 'test-notify.mjs')
 if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: notify'; exit 1 }
 
   # 2) panel scripts (plain check)
-  $panel = @('app.js', 'api.js')
+  $panel = @('app.js', 'api.js', 'components.js')
   foreach ($f in $panel) {
     $p = Join-Path $root 'public\assets'
     $p = Join-Path $p $f
@@ -25,7 +25,7 @@ if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: notify'; exit 1 }
   }
 
 # 3) backend ESM -> copy as .mjs then check
-$esm = @('index.js', 'runner.js', 'scheduler.js', 'seed.js', 'nextrun.js', 'notify.js', 'coordinator.js')
+$esm = @('index.js', 'auth.js', 'runner.js', 'scheduler.js', 'seed.js', 'nextrun.js', 'notify.js', 'coordinator.js')
 foreach ($f in $esm) {
   $p = Join-Path $root 'src'
   $p = Join-Path $p $f

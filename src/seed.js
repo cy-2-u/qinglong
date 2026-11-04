@@ -1,4 +1,4 @@
-// D1 建表 + 迁移 + 内置任务播种。ensureReady 在每个入口（API / 心跳）调用，
+// D1 建表 + 内置任务播种。ensureReady 在每个入口（API / 心跳）调用，
 // isolate 内记忆化，成功一次后不再打数据库。
 import { initialNext, tzOffsetSec } from './nextrun.js';
 
@@ -7,7 +7,6 @@ const DDL = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1,
-    script_code TEXT NOT NULL DEFAULT '',
     script_key TEXT,
     params TEXT NOT NULL DEFAULT '{}',
     interval_amount INTEGER NOT NULL DEFAULT 1,
@@ -49,13 +48,6 @@ export async function ensureReady(env) {
   const db = env.DB;
   if (!db) throw new Error('D1 未绑定（检查 wrangler.toml 的 database_id）');
   await db.batch(DDL.map((sql) => db.prepare(sql)));
-
-  // 迁移：旧库可能没有 script_key 列；已有任务的 script_code 按内容回填
-  try {
-    await db.prepare('ALTER TABLE tasks ADD COLUMN script_key TEXT').run();
-  } catch (e) { /* 列已存在 */ }
-  await db.prepare("UPDATE tasks SET script_key='glados-checkin' WHERE script_key IS NULL AND script_code LIKE '%GLaDOS%'").run();
-  await db.prepare("UPDATE tasks SET script_key='dnshe-renew' WHERE script_key IS NULL AND script_code LIKE '%DNSHE%'").run();
 
   const seeded = await db.prepare("SELECT value FROM settings WHERE key='seeded'").first();
   if (!seeded) {
