@@ -1,26 +1,31 @@
 /* 面板主逻辑：视图渲染 + 事件分发。
    数据一律走 window.API；组件能力（下拉/弹窗/确认/toast）一律走 window.UI。
-   列表 30s 刷新用 patchTaskCard 原地更新卡片统计，不重建 DOM（保输入焦点、不闪 tooltip）。 */
+   列表 30s 刷新用 patchTaskCard 原地更新卡片统计，不重建 DOM。 */
 (function () {
   'use strict';
 
   var UI = window.UI, API = window.API;
   var $ = UI.$, $all = UI.$all, esc = UI.esc;
 
-  // ---------- 常量 ----------
+  // ---------- 图标（stroke 风格，viewBox 24） ----------
+  // 品牌：与 favicon.svg 同款（弧线 + 圆点），避免"加载圈"歧义
+  var BRAND = '<svg viewBox="0 0 64 64" width="22" height="22" aria-hidden="true"><circle cx="32" cy="32" r="17" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-dasharray="80 27" transform="rotate(115 32 32)"/><circle cx="32" cy="32" r="5" fill="currentColor" stroke="none"/></svg>';
   var ICONS = {
-    logo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>',
-    plus: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
-    run: '<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.6 6.2c0-.9.95-1.4 1.7-1l5 3c.75.45.75 1.55 0 2l-5 3c-.75.4-1.7-.1-1.7-1z"/></svg>',
-    pen: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>',
-    trash: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>',
-    doc: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8"/></svg>',
-    gear: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
-    sun: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
-    moon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
-    out: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+    // 运行：圆环描边 + 质心居中的实心三角（三角略右移补偿视觉重心）
+    run: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.2 8.6v6.8c0 .5.55.8.98.53l5.1-3.06a.62.62 0 0 0 0-1.06l-5.1-3.06a.62.62 0 0 0-.98.53z" fill="currentColor" stroke="none"/></svg>',
+    doc: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9.5 13h5M9.5 16.5h5"/></svg>',
+    pen: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3.5a2.6 2.6 0 1 1 3.7 3.7L7.5 20.4 2.5 21.7l1.3-5z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M18.5 7l-.8 12a2 2 0 0 1-2 1.9H8.3a2 2 0 0 1-2-1.9L5.5 7M10 11v5.5M14 11v5.5"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16S18 14 18 9"/><path d="M10 19a2.2 2.2 0 0 0 4 0"/></svg>',
+    sun: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg>',
+    moon: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13.2A8.5 8.5 0 1 1 10.8 3.5a6.8 6.8 0 0 0 9.7 9.7z"/></svg>',
+    out: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3M15.5 16.5 20 12l-4.5-4.5M20 12H9.5"/></svg>',
+    back: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>',
+    x: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   };
   UI.ICONS = ICONS;
+  UI.BRAND = BRAND;
 
   var UNITS = {
     h: { label: '小时', max: 23 },
@@ -29,20 +34,19 @@
   };
 
   var STATUS = {
-    never: { label: '未运行', cls: 'status-never' },
-    ok: { label: '成功', cls: 'status-ok' },
-    failed: { label: '失败', cls: 'status-failed' },
-    running: { label: '运行中', cls: 'status-running' },
+    never: { label: '待运行', cls: 'st-wait' },
+    ok: { label: '成功', cls: 'st-ok' },
+    failed: { label: '失败', cls: 'st-err' },
+    running: { label: '运行中', cls: 'st-run' },
   };
 
   // ---------- 状态 ----------
   var state = {
-    view: 'login',       // login | list | editor | settings
+    view: 'login',       // login | list | editor
     tasks: [],
     builtins: [],
     editing: null,       // 编辑中的任务（null = 新建）
     settings: { notify_key: '' },
-    loaded: false,
   };
 
   // ---------- 小工具 ----------
@@ -79,11 +83,10 @@
     document.body.className = 'bg-login';
     document.getElementById('app').innerHTML =
       '<div class="login-wrap"><form class="login-card" id="login-form">' +
-      '<div class="login-logo">' + ICONS.logo + '</div>' +
+      '<div class="login-logo">' + BRAND + '</div>' +
       '<h1>青龙面板</h1>' +
-      '<p class="muted">输入访问密码进入</p>' +
       '<input id="login-pw" type="password" placeholder="访问密码" autocomplete="current-password">' +
-      '<button id="login-btn" class="btn btn-primary btn-block" type="submit">进 入</button>' +
+      '<button id="login-btn" class="btn btn-primary btn-block" type="submit">进入</button>' +
       (msg ? '<p class="login-err">' + esc(msg) + '</p>' : '') +
       '</form></div>';
     $('#login-form').addEventListener('submit', function (e) { e.preventDefault(); doLogin(); });
@@ -106,14 +109,14 @@
   function renderShell() {
     document.body.className = '';
     document.getElementById('app').innerHTML =
-      '<header class="topbar"><div class="brand">' + ICONS.logo + '<span>青龙面板</span></div>' +
+      '<header class="topbar"><div class="brand">' + BRAND + '<span>青龙面板</span></div>' +
       '<div class="top-actions">' +
       '<button class="icon-btn" id="theme-btn" title="切换主题"></button>' +
-      '<button class="icon-btn" id="settings-btn" title="通知设置">' + ICONS.gear + '</button>' +
+      '<button class="icon-btn" id="notify-btn" title="推送设置">' + ICONS.bell + '</button>' +
       '<button class="icon-btn" id="logout-btn" title="退出登录">' + ICONS.out + '</button>' +
       '</div></header>' +
       '<main class="container">' +
-      '<div class="toolbar"><button class="btn btn-primary" id="new-btn">' + ICONS.plus + ' 新建任务</button><div class="strip" id="strip"></div></div>' +
+      '<div class="toolbar"><button class="btn btn-primary" id="new-btn">' + ICONS.plus + '新建任务</button><div class="strip" id="strip"></div></div>' +
       '<div id="view"></div>' +
       '</main>';
     $('#theme-btn').addEventListener('click', toggleTheme);
@@ -121,7 +124,11 @@
       document.cookie = 'ql_sess=; Max-Age=0; Path=/';
       renderLogin();
     });
-    $('#settings-btn').addEventListener('click', function () { openSettings(); });
+    // 推送设置 = 弹窗：点铃铛开，再点（或点 X / 遮罩 / Esc）返回，天然有"返回逻辑"
+    $('#notify-btn').addEventListener('click', function () {
+      if (document.querySelector('.overlay')) UI.closeModal();
+      else openNotifySheet();
+    });
     $('#new-btn').addEventListener('click', function () { openEditor(null); });
     applyTheme();
   }
@@ -145,7 +152,7 @@
     state.view = 'list';
     var box = $('#view');
     if (!state.tasks.length) {
-      box.innerHTML = '<div class="empty"><p>还没有任务</p><p class="muted">点右上「新建任务」，从内置任务库挑选一个开始</p></div>';
+      box.innerHTML = '<div class="empty"><p>还没有任务</p><p class="muted">点「新建任务」开始</p></div>';
       return;
     }
     var h = '<div class="list">';
@@ -158,11 +165,11 @@
     return '<div class="card task' + (t.enabled ? '' : ' task-disabled') + '" data-id="' + t.id + '">' +
       '<div class="task-main">' +
       '<div class="task-head"><span class="task-name">' + esc(t.name) + '</span>' +
-      '<span class="chip chip-script">' + esc(builtinName(t.script_key)) + '</span></div>' +
+      '<span class="chip">' + esc(builtinName(t.script_key)) + '</span></div>' +
       '<div class="task-meta">' + metaText(t) + '</div>' +
       '</div>' +
       '<div class="task-side">' +
-      '<span class="chip task-status ' + st.cls + '">' + st.label + '</span>' +
+      '<span class="dot ' + st.cls + '" title="' + st.label + '"></span>' +
       '<label class="switch" title="启用/停用"><input type="checkbox" data-act="toggle"' + (t.enabled ? ' checked' : '') + '><span class="slider"></span></label>' +
       '<div class="task-actions">' +
       '<button class="icon-btn" data-act="run" title="立即运行">' + ICONS.run + '</button>' +
@@ -185,8 +192,8 @@
     var meta = card.querySelector('.task-meta');
     if (meta) meta.innerHTML = metaText(t);
     var st = STATUS[t.last_status] || STATUS.never;
-    var chip = card.querySelector('.task-status');
-    if (chip) { chip.className = 'chip task-status ' + st.cls; chip.textContent = st.label; }
+    var dot = card.querySelector('.dot');
+    if (dot) { dot.className = 'dot ' + st.cls; dot.setAttribute('title', st.label); }
     var sw = card.querySelector('input[data-act="toggle"]');
     if (sw) sw.checked = !!t.enabled;
     card.classList.toggle('task-disabled', !t.enabled);
@@ -204,15 +211,23 @@
         if (t.next_run_at && (!next || t.next_run_at < next)) next = t.next_run_at;
       }
     }
-    el.innerHTML = '共 ' + state.tasks.length + ' 个任务 · ' + enabled + ' 个已启用' +
+    el.innerHTML = state.tasks.length + ' 个任务 · ' + enabled + ' 启用' +
       (next ? ' · 下次 ' + fmtTime(next) : '');
   }
 
-  // ---------- 视图：编辑器 ----------
-  function unitItems() {
-    return [
-      { v: 'h', label: '每小时' }, { v: 'd', label: '每天' }, { v: 'm', label: '每月' },
-    ];
+  // ---------- 视图：编辑器（弹层） ----------
+  function segHtml(id, items, current) {
+    var h = '<div class="seg" data-seg="' + id + '">';
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      h += '<button type="button" class="seg-btn' + (it.v === current ? ' on' : '') + '" data-seg="' + id + '" data-value="' + it.v + '">' + it.label + '</button>';
+    }
+    return h + '</div>';
+  }
+
+  function segValue(id) {
+    var el = document.querySelector('.seg[data-seg="' + id + '"] .seg-btn.on');
+    return el ? el.getAttribute('data-value') : null;
   }
 
   function openEditor(task) {
@@ -221,37 +236,40 @@
     var t = state.editing;
     var unit = t ? t.interval_unit : 'd';
     var key = t ? t.script_key : (state.builtins.length ? state.builtins[0].key : '');
-    var h = '<div class="form-card" id="editor">' +
-      '<h2 id="edit-title">' + (t ? '编辑任务' : '新建任务') + '</h2>' +
+    var ov = UI.openModal(
+      '<div class="sheet-head"><h2>' + (t ? '编辑任务' : '新建任务') + '</h2>' +
+      '<button class="icon-btn sheet-x" title="关闭">' + ICONS.x + '</button></div>' +
 
-      '<div class="form-sec"><label>任务名称</label>' +
-      '<input id="f-name" type="text" maxlength="100" placeholder="例如：GLaDOS 每日签到" value="' + esc(t ? t.name : '') + '"></div>' +
+      '<div class="sec"><label>名称</label>' +
+      '<input id="f-name" type="text" maxlength="100" placeholder="任务名称" value="' + esc(t ? t.name : '') + '"></div>' +
 
-      '<div class="form-sec"><label>内置脚本</label>' + UI.ddHtml('script', builtinItems(), key) +
-      '<p class="muted">Workers 平台禁止运行时编译脚本，任务只能引用随构建打包的内置库；' +
-      '新增脚本 = src/tasks/ 下加模块并在 builtins.js 注册一行。</p></div>' +
+      '<div class="sec"><label>脚本</label>' + UI.ddHtml('script', builtinItems(), key) + paramsHtml(key, t) + '</div>' +
 
-      '<div class="form-sec" id="f-params"><label>脚本参数</label>' + paramsHtml(key, t) + '</div>' +
-
-      '<div class="form-sec"><label>执行频率</label><div class="freq-row">' +
-      UI.ddHtml('unit', unitItems(), unit) +
+      '<div class="sec"><label>频率</label><div class="freq-row">' +
+      segHtml('unit', [{ v: 'h', label: '每小时' }, { v: 'd', label: '每天' }, { v: 'm', label: '每月' }], unit) +
       '<span class="freq-t">间隔</span><input id="f-amount" class="freq-num" type="number" min="1" value="' + (t ? t.interval_amount : 1) + '">' +
-      '<span class="freq-t" id="f-hour-wrap">时刻<input id="f-hour" class="freq-num" type="number" min="0" max="23" value="' + (t && t.run_hour != null ? t.run_hour : 9) + '"></span>' +
-      '<span class="freq-t" id="f-day-wrap">日期<input id="f-day" class="freq-num" type="number" min="1" max="28" value="' + (t && t.run_day != null ? t.run_day : 1) + '"></span>' +
+      '<span class="freq-t" id="f-hour-wrap">时刻</span><input id="f-hour" class="freq-num" type="number" min="0" max="23" value="' + (t && t.run_hour != null ? t.run_hour : 9) + '">' +
+      '<span class="freq-t" id="f-day-wrap">日期</span><input id="f-day" class="freq-num" type="number" min="1" max="28" value="' + (t && t.run_day != null ? t.run_day : 1) + '">' +
       '</div><div class="freq-preview" id="freq-preview"></div></div>' +
 
-      '<div class="form-sec form-sec-inline"><label>启用</label>' +
+      '<div class="sec sec-inline"><label>启用</label>' +
       '<label class="switch"><input type="checkbox" id="f-enabled"' + (!t || t.enabled ? ' checked' : '') + '><span class="slider"></span></label></div>' +
 
-      '<div class="form-foot">' +
+      '<div class="sheet-foot">' +
       '<button class="btn" id="cancel-btn">取消</button>' +
       '<button class="btn btn-primary" id="save-btn">保存</button>' +
-      '</div></div>';
-    $('#view').innerHTML = h;
+      '</div>'
+    );
     syncUnitFields();
     updateFreqPreview();
-    $('#cancel-btn').addEventListener('click', function () { showList(); });
-    $('#save-btn').addEventListener('click', saveEditor);
+    $('#cancel-btn', ov).addEventListener('click', closeEditor);
+    $('#save-btn', ov).addEventListener('click', saveEditor);
+  }
+
+  function closeEditor() {
+    UI.closeModal();
+    state.view = 'list';
+    state.editing = null;
   }
 
   function builtinItems() {
@@ -264,15 +282,14 @@
 
   function paramsHtml(key, t) {
     var b = builtinOf(key);
-    if (!b || !b.params || !b.params.length) return '<p class="muted">该脚本无需参数</p>';
+    if (!b || !b.params || !b.params.length) return '';
     var cur = (t && t.params) || {};
-    var h = '';
+    var h = '<div id="f-params" class="params">';
     for (var i = 0; i < b.params.length; i++) {
       var name = b.params[i];
-      h += '<div class="param-row"><label>' + esc(name) + '</label>' +
-        '<input type="text" data-param="' + esc(name) + '" value="' + esc(cur[name] != null ? cur[name] : '') + '" placeholder="' + esc(name) + '"></div>';
+      h += '<input type="text" data-param="' + esc(name) + '" value="' + esc(cur[name] != null ? cur[name] : '') + '" placeholder="' + esc(name) + '">';
     }
-    return h;
+    return h + '</div>';
   }
 
   function builtinOf(key) {
@@ -283,10 +300,12 @@
   }
 
   function syncUnitFields() {
-    var unit = UI.ddValue('unit') || 'd';
-    var hw = $('#f-hour-wrap'), dw = $('#f-day-wrap');
-    if (hw) hw.classList.toggle('hidden', unit === 'h');
+    var unit = segValue('unit') || 'd';
+    var hw = $('#f-hour-wrap'), dw = $('#f-day-wrap'), hi = $('#f-hour'), di = $('#f-day');
+    if (hw) hw.classList.toggle('hidden', unit !== 'm');
     if (dw) dw.classList.toggle('hidden', unit !== 'm');
+    if (hi) hi.classList.toggle('hidden', unit === 'h');
+    if (di) di.classList.toggle('hidden', unit !== 'm');
     var amount = $('#f-amount');
     if (amount) amount.max = UNITS[unit] ? UNITS[unit].max : 30;
   }
@@ -294,15 +313,14 @@
   function updateFreqPreview() {
     var el = $('#freq-preview');
     if (!el) return;
-    var unit = UI.ddValue('unit') || 'd';
+    var unit = segValue('unit') || 'd';
     var n = Math.max(1, Math.round(Number($('#f-amount').value) || 1));
     var hour = Math.min(23, Math.max(0, parseInt($('#f-hour').value, 10) || 0));
     var day = Math.min(28, Math.max(1, parseInt($('#f-day').value, 10) || 1));
-    var u = UNITS[unit] || UNITS.d;
     var text;
     if (unit === 'h') text = (n === 1 ? '每小时' : '每 ' + n + ' 小时') + '运行一次';
-    else if (unit === 'd') text = (n === 1 ? '每天' : '每 ' + n + ' 天') + ' · 北京时间 ' + pad(hour) + ':00 运行';
-    else text = (n === 1 ? '每月' : '每 ' + n + ' 个月') + ' ' + day + ' 日 ' + pad(hour) + ':00（北京时间）运行';
+    else if (unit === 'd') text = (n === 1 ? '每天' : '每 ' + n + ' 天') + ' · 北京时间 ' + pad(hour) + ':00';
+    else text = (n === 1 ? '每月' : '每 ' + n + ' 个月') + ' ' + day + ' 日 ' + pad(hour) + ':00';
     el.textContent = text;
   }
 
@@ -315,7 +333,7 @@
   }
 
   function harvestSchedule() {
-    var unit = UI.ddValue('unit') || 'd';
+    var unit = segValue('unit') || 'd';
     var max = UNITS[unit] ? UNITS[unit].max : 30;
     var amount = Math.min(max, Math.max(1, Math.round(Number($('#f-amount').value) || 1)));
     var hour = Math.min(23, Math.max(0, parseInt($('#f-hour').value, 10) || 0));
@@ -325,9 +343,9 @@
 
   async function saveEditor() {
     var name = $('#f-name').value.trim();
-    if (!name) { UI.toast('任务名称不能为空', 'err'); $('#f-name').focus(); return; }
+    if (!name) { UI.toast('名称不能为空', 'err'); $('#f-name').focus(); return; }
     var key = UI.ddValue('script');
-    if (!key) { UI.toast('请选择内置脚本', 'err'); return; }
+    if (!key) { UI.toast('请选择脚本', 'err'); return; }
     var body = Object.assign(
       { id: state.editing ? state.editing.id : undefined, name: name, script_key: key, params: harvestParams(), enabled: $('#f-enabled').checked ? 1 : 0 },
       harvestSchedule()
@@ -335,34 +353,37 @@
     try {
       await API.saveTask(body);
       UI.toast('已保存', 'ok');
+      closeEditor();
       await loadTasks();
-      showList();
+      renderList();
+      renderListStrip();
     } catch (e) { UI.toast(e.message, 'err'); }
   }
 
-  // ---------- 视图：设置 ----------
-  async function openSettings() {
-    state.view = 'settings';
+  // ---------- 推送设置弹层（右上铃铛 → 弹窗，再点/X/遮罩/Esc 返回） ----------
+  async function openNotifySheet() {
     try { state.settings = await API.getSettings(); } catch (e) { /* 沿用旧值 */ }
-    $('#view').innerHTML =
-      '<div class="form-card"><h2>通知设置</h2>' +
-      '<div class="form-sec"><label>TimelyNotify 推送密钥</label>' +
-      '<input id="s-key" type="text" placeholder="推送服务的密钥（URL path 第一段）" value="' + esc(state.settings.notify_key || '') + '">' +
-      '<p class="muted">任务脚本调用 ctx.notify 时推送通知；留空则跳过推送，不影响任务运行。</p></div>' +
-      '<div class="form-foot">' +
-      '<button class="btn" id="test-notify-btn">发送测试推送</button>' +
+    var ov = UI.openModal(
+      '<div class="sheet-head"><h2>推送设置</h2>' +
+      '<button class="icon-btn sheet-x" title="关闭">' + ICONS.x + '</button></div>' +
+      '<div class="sec"><label>TimelyNotify 密钥</label>' +
+      '<input id="s-key" type="text" placeholder="推送服务密钥" value="' + esc(state.settings.notify_key || '') + '">' +
+      '<p class="hint">脚本通过 ctx.notify 推送通知；留空则跳过，不影响任务。</p></div>' +
+      '<div class="sheet-foot">' +
+      '<button class="btn" id="test-notify-btn">测试推送</button>' +
       '<button class="btn btn-primary" id="save-settings-btn">保存</button>' +
-      '</div></div>';
-    $('#save-settings-btn').addEventListener('click', async function () {
+      '</div>'
+    );
+    $('#save-settings-btn', ov).addEventListener('click', async function () {
       try {
-        await API.saveSettings({ notify_key: $('#s-key').value.trim() });
-        UI.toast('通知设置已保存', 'ok');
+        await API.saveSettings({ notify_key: $('#s-key', ov).value.trim() });
+        UI.toast('已保存', 'ok');
       } catch (e) { UI.toast(e.message, 'err'); }
     });
-    $('#test-notify-btn').addEventListener('click', async function () {
+    $('#test-notify-btn', ov).addEventListener('click', async function () {
       try {
-        await API.testNotify($('#s-key').value.trim());
-        UI.toast('测试推送已发送，请查收', 'ok');
+        await API.testNotify($('#s-key', ov).value.trim());
+        UI.toast('测试推送已发送', 'ok');
       } catch (e) { UI.toast('推送失败: ' + e.message, 'err'); }
     });
   }
@@ -371,26 +392,25 @@
   async function openLogs(id) {
     var t = taskOf(id);
     var ov = UI.openModal(
-      '<div class="modal-head"><h3>日志 · ' + esc(t ? t.name : '#' + id) + '</h3>' +
-      '<div class="modal-head-btns"><button class="btn btn-sm" id="logs-refresh">刷新</button>' +
-      '<button class="icon-btn modal-x" title="关闭">✕</button></div></div>' +
-      '<div class="logs" id="logs-body"><p class="muted">加载中…</p></div>'
+      '<div class="sheet-head"><h3>' + esc(t ? t.name : '#' + id) + '</h3>' +
+      '<div class="head-btns"><button class="btn btn-sm" id="logs-refresh">刷新</button>' +
+      '<button class="icon-btn sheet-x" title="关闭">' + ICONS.x + '</button></div></div>' +
+      '<div class="logs" id="logs-body"><p class="hint">加载中…</p></div>'
     );
     var load = async function () {
       var body = $('#logs-body', ov);
       try {
         var logs = await API.listLogs(id);
-        if (!logs.length) { body.innerHTML = '<p class="muted">暂无日志</p>'; return; }
+        if (!logs.length) { body.innerHTML = '<p class="hint">暂无日志</p>'; return; }
         var h = '';
         for (var i = 0; i < logs.length; i++) {
           var l = logs[i];
           h += '<div class="log-line' + (l.level === 'error' ? ' log-err' : '') + '">' +
             '<span class="log-ts">' + esc(fmtTime(l.ts, true)) + '</span>' +
-            '<span class="log-lv">' + esc(l.level) + '</span>' +
             '<span class="log-tx">' + esc(l.text) + '</span></div>';
         }
         body.innerHTML = h;
-      } catch (e) { body.innerHTML = '<p class="muted">加载失败: ' + esc(e.message) + '</p>'; }
+      } catch (e) { body.innerHTML = '<p class="hint">加载失败</p>'; }
     };
     $('#logs-refresh', ov).addEventListener('click', load);
     load();
@@ -411,7 +431,7 @@
       if (btn) btn.disabled = true;
       try {
         var res = await API.runTask(id);
-        UI.toast(res.status === 'ok' ? '运行成功' : '运行失败，看日志详情', res.status === 'ok' ? 'ok' : 'err');
+        UI.toast(res.status === 'ok' ? '运行成功' : '运行失败', res.status === 'ok' ? 'ok' : 'err');
       } catch (e) { UI.toast(e.message, 'err'); }
       if (btn) btn.disabled = false;
       await refreshStats();
@@ -422,7 +442,7 @@
       var t = taskOf(id);
       var yes = await UI.confirmDialog({
         title: '删除任务', danger: true, yes: '删除',
-        message: '确定删除「' + (t ? t.name : '#' + id) + '」？其日志会一并清除，不可恢复。',
+        message: '「' + (t ? t.name : '#' + id) + '」及其日志将被删除，不可恢复。',
       });
       if (!yes) return;
       try {
@@ -455,14 +475,18 @@
         var t = taskOf(id);
         if (t) { Object.assign(t, b.task); patchTaskCard(t); }
         renderListStrip();
-        UI.toast(el.checked ? '已启用' : '已停用', 'ok');
       }).catch(function (err) {
         el.checked = !el.checked;
         UI.toast(err.message, 'err');
       });
       return;
     }
-    if (el.id === 'f-enabled') return; // 保存时读取
+    if (el.classList && el.classList.contains('seg-btn')) {
+      var seg = el.closest('.seg');
+      $all('.seg-btn', seg).forEach(function (x) { x.classList.toggle('on', x === el); });
+      if (seg.getAttribute('data-seg') === 'unit') { syncUnitFields(); updateFreqPreview(); }
+      return;
+    }
   }
 
   function onInput(e) {
@@ -471,11 +495,16 @@
   }
 
   function onDdChange(ddId) {
-    if (ddId === 'unit') { syncUnitFields(); updateFreqPreview(); }
     if (ddId === 'script') {
       var key = UI.ddValue('script');
       var box = $('#f-params');
-      if (box) box.innerHTML = '<label>脚本参数</label>' + paramsHtml(key, state.editing);
+      if (box) box.remove();
+      var t = state.editing;
+      var ph = paramsHtml(key, t);
+      if (ph) {
+        var anchor = document.querySelector('.dd[data-dd="script"]');
+        if (anchor && anchor.parentElement) anchor.insertAdjacentHTML('afterend', ph);
+      }
     }
   }
 
@@ -493,18 +522,13 @@
     } catch (e) { /* 静默：下一轮再试 */ }
   }
 
-  function showList() {
-    renderList();
-    renderListStrip();
-  }
-
   async function enterPanel() {
-    state.loaded = true;
     var b = await API.getBuiltins();
     state.builtins = b.builtins || [];
     await loadTasks();
     renderShell();
-    showList();
+    renderList();
+    renderListStrip();
     setInterval(refreshStats, 30000);
   }
 

@@ -80,10 +80,10 @@
     opts = opts || {};
     return new Promise(function (resolve) {
       openModal(
-        '<div class="modal-confirm">' +
+        '<div class="confirm">' +
         '<h3>' + esc(opts.title || '确认') + '</h3>' +
         '<p>' + esc(opts.message || '') + '</p>' +
-        '<div class="modal-foot">' +
+        '<div class="sheet-foot">' +
         '<button type="button" class="btn" data-confirm="no">' + esc(opts.no || '取消') + '</button>' +
         '<button type="button" class="btn ' + (opts.danger ? 'btn-danger' : 'btn-primary') + '" data-confirm="yes">' + esc(opts.yes || '确定') + '</button>' +
         '</div></div>'
