@@ -173,16 +173,27 @@
   flex: none;
 }
 
-.dot {
+/* ---------- 圆点状态（异常才出现：成功/待运行静默） ---------- */
+.dot { display: none; }
+.dot.st-err {
+  display: block;
   width: 9px;
   height: 9px;
   border-radius: 50%;
   flex: none;
-  background: var(--dot-wait);
+  background: var(--err);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent);
 }
-.dot.st-ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
-.dot.st-err { background: var(--err); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent); }
-.dot.st-run { background: var(--run); box-shadow: 0 0 0 3px color-mix(in srgb, var(--run) 18%, transparent); animation: pulse 1.2s ease-in-out infinite; }
+.dot.st-run {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--run);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--run) 18%, transparent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
 
 @keyframes pulse {
   50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--run) 8%, transparent); }

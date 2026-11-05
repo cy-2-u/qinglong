@@ -1,16 +1,4 @@
-fix(ui): wire sheet close buttons and harden interactions
+fix(ui): hide status dot for success/waiting states
 
-- close buttons dead: wire() still listened for .modal-x after rename to
-  .sheet-x - push settings and logs X buttons did nothing
-- seg control was completely unwired (click never fired): components wire now
-  handles .seg-btn and calls onSegChange
-- unify modal close paths (X / backdrop / Esc) through onModalClose callback so
-  the editor resets state.view and the 30s refresh resumes
-- notify sheet: save closes the sheet; save/test buttons get busy states
-  (test push is a real send - prevent double-fire)
-- run action: backend 'running' status no longer toasted as failure
-- logout/session-expiry now closes any open modal (modal used to linger over
-  the login page); login error maps fetch failures to a friendly message
-- guard 30s refresh timer against stacking after re-login
-- iOS: 16px input font under 560px prevents focus auto-zoom; tap highlight off
-- css: modal-sm for confirm dialogs, log line word-break, hint copy simplified
+green dot next to the switch read as noise; only failed (red) and running
+(amber pulse) states render a dot now, success stays silent
