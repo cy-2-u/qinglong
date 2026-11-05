@@ -21,11 +21,8 @@
     sun: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg>',
     moon: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13.2A8.5 8.5 0 1 1 10.8 3.5a6.8 6.8 0 0 0 9.7 9.7z"/></svg>',
     out: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3M15.5 16.5 20 12l-4.5-4.5M20 12H9.5"/></svg>',
-    back: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>',
     x: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   };
-  UI.ICONS = ICONS;
-  UI.BRAND = BRAND;
 
   var UNITS = {
     h: { label: '小时', max: 23 },
@@ -47,6 +44,7 @@
     builtins: [],
     editing: null,       // 编辑中的任务（null = 新建）
     settings: { notify_key: '' },
+    timer: null,         // 30s 刷新定时器（防重复登录叠加）
   };
 
   // ---------- 小工具 ----------
@@ -80,6 +78,7 @@
   // ---------- 视图：登录 ----------
   function renderLogin(msg) {
     state.view = 'login';
+    UI.closeModal(); // 退出/会话过期时若有弹窗开着，一并清掉
     document.body.className = 'bg-login';
     document.getElementById('app').innerHTML =
       '<div class="login-wrap"><form class="login-card" id="login-form">' +
@@ -101,7 +100,9 @@
       await API.login(pw);
       await enterPanel();
     } catch (e) {
-      renderLogin(e.message === 'UNAUTHORIZED' ? '密码错误' : e.message);
+      var msg = e.message === 'UNAUTHORIZED' ? '密码错误'
+        : (e.message && e.message.indexOf('Failed to fetch') >= 0 ? '网络错误，请重试' : e.message);
+      renderLogin(msg);
     }
   }
 
@@ -124,9 +125,10 @@
       document.cookie = 'ql_sess=; Max-Age=0; Path=/';
       renderLogin();
     });
-    // 推送设置 = 弹窗：点铃铛开，再点（或点 X / 遮罩 / Esc）返回，天然有"返回逻辑"
+    // 推送设置 = 弹窗：点铃铛开，再点（或点 X / 遮罩 / Esc）返回。
+    // 关闭统一走 closeEditor（含 state.view 复位），避免编辑器开着时点铃铛留下残留状态
     $('#notify-btn').addEventListener('click', function () {
-      if (document.querySelector('.overlay')) UI.closeModal();
+      if (document.querySelector('.overlay')) closeEditor();
       else openNotifySheet();
     });
     $('#new-btn').addEventListener('click', function () { openEditor(null); });
@@ -302,7 +304,7 @@
   function syncUnitFields() {
     var unit = segValue('unit') || 'd';
     var hw = $('#f-hour-wrap'), dw = $('#f-day-wrap'), hi = $('#f-hour'), di = $('#f-day');
-    if (hw) hw.classList.toggle('hidden', unit !== 'm');
+    if (hw) hw.classList.toggle('hidden', unit === 'h');  // 时刻：天/月都要
     if (dw) dw.classList.toggle('hidden', unit !== 'm');
     if (hi) hi.classList.toggle('hidden', unit === 'h');
     if (di) di.classList.toggle('hidden', unit !== 'm');
@@ -346,6 +348,8 @@
     if (!name) { UI.toast('名称不能为空', 'err'); $('#f-name').focus(); return; }
     var key = UI.ddValue('script');
     if (!key) { UI.toast('请选择脚本', 'err'); return; }
+    var btn = $('#save-btn');
+    btn.disabled = true; btn.textContent = '保存中…';
     var body = Object.assign(
       { id: state.editing ? state.editing.id : undefined, name: name, script_key: key, params: harvestParams(), enabled: $('#f-enabled').checked ? 1 : 0 },
       harvestSchedule()
@@ -357,7 +361,10 @@
       await loadTasks();
       renderList();
       renderListStrip();
-    } catch (e) { UI.toast(e.message, 'err'); }
+    } catch (e) {
+      UI.toast(e.message, 'err');
+      btn.disabled = false; btn.textContent = '保存';
+    }
   }
 
   // ---------- 推送设置弹层（右上铃铛 → 弹窗，再点/X/遮罩/Esc 返回） ----------
@@ -368,23 +375,35 @@
       '<button class="icon-btn sheet-x" title="关闭">' + ICONS.x + '</button></div>' +
       '<div class="sec"><label>TimelyNotify 密钥</label>' +
       '<input id="s-key" type="text" placeholder="推送服务密钥" value="' + esc(state.settings.notify_key || '') + '">' +
-      '<p class="hint">脚本通过 ctx.notify 推送通知；留空则跳过，不影响任务。</p></div>' +
+      '<p class="hint">任务运行时用它推送通知；留空则不推送。</p></div>' +
       '<div class="sheet-foot">' +
       '<button class="btn" id="test-notify-btn">测试推送</button>' +
       '<button class="btn btn-primary" id="save-settings-btn">保存</button>' +
       '</div>'
     );
     $('#save-settings-btn', ov).addEventListener('click', async function () {
+      var btn = $('#save-settings-btn', ov);
+      btn.disabled = true;
       try {
         await API.saveSettings({ notify_key: $('#s-key', ov).value.trim() });
+        UI.closeModal();
         UI.toast('已保存', 'ok');
-      } catch (e) { UI.toast(e.message, 'err'); }
+      } catch (e) {
+        UI.toast(e.message, 'err');
+        btn.disabled = false;
+      }
     });
+    // 测试推送是真发一条，busy 态防连点
     $('#test-notify-btn', ov).addEventListener('click', async function () {
+      var btn = $('#test-notify-btn', ov);
+      btn.disabled = true; btn.textContent = '发送中…';
       try {
         await API.testNotify($('#s-key', ov).value.trim());
         UI.toast('测试推送已发送', 'ok');
-      } catch (e) { UI.toast('推送失败: ' + e.message, 'err'); }
+      } catch (e) {
+        UI.toast('推送失败: ' + e.message, 'err');
+      }
+      btn.disabled = false; btn.textContent = '测试推送';
     });
   }
 
@@ -431,7 +450,8 @@
       if (btn) btn.disabled = true;
       try {
         var res = await API.runTask(id);
-        UI.toast(res.status === 'ok' ? '运行成功' : '运行失败', res.status === 'ok' ? 'ok' : 'err');
+        if (res.status === 'running') UI.toast('任务已在运行中');
+        else UI.toast(res.status === 'ok' ? '运行成功' : '运行失败', res.status === 'ok' ? 'ok' : 'err');
       } catch (e) { UI.toast(e.message, 'err'); }
       if (btn) btn.disabled = false;
       await refreshStats();
@@ -479,13 +499,6 @@
         el.checked = !el.checked;
         UI.toast(err.message, 'err');
       });
-      return;
-    }
-    if (el.classList && el.classList.contains('seg-btn')) {
-      var seg = el.closest('.seg');
-      $all('.seg-btn', seg).forEach(function (x) { x.classList.toggle('on', x === el); });
-      if (seg.getAttribute('data-seg') === 'unit') { syncUnitFields(); updateFreqPreview(); }
-      return;
     }
   }
 
@@ -529,12 +542,19 @@
     renderShell();
     renderList();
     renderListStrip();
-    setInterval(refreshStats, 30000);
+    if (!state.timer) state.timer = setInterval(refreshStats, 30000);
   }
 
   // ---------- 启动 ----------
   function init() {
-    UI.wire({ onDdChange: onDdChange });
+    UI.wire({
+      onDdChange: onDdChange,
+      onSegChange: function (segId) {
+        if (segId === 'unit') { syncUnitFields(); updateFreqPreview(); }
+      },
+      // X / 遮罩 / Esc 关闭编辑器时复位视图状态，否则 30s 刷新会一直被跳过
+      onModalClose: function () { if (state.view === 'editor') closeEditor(); },
+    });
     document.addEventListener('click', onClick);
     document.addEventListener('change', onChange);
     document.addEventListener('input', onInput);

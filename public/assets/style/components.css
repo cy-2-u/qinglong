@@ -214,6 +214,7 @@
   animation: sheet-in 0.18s ease-out;
   overflow: auto;
 }
+.modal-sm { width: min(340px, 100%); }
 .sheet-head {
   display: flex;
   align-items: center;
@@ -248,6 +249,7 @@
 }
 .log-line { display: flex; gap: 10px; padding: 2.5px 0; }
 .log-ts { color: var(--text-faint); flex: none; }
+.log-tx { flex: 1; word-break: break-word; }
 .log-err .log-tx { color: var(--err); }
 
 /* ---------- toast ---------- */

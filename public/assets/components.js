@@ -61,11 +61,11 @@
   // ---------- 弹窗 / 确认框 ----------
   var confirmResolve = null;
 
-  function openModal(inner) {
+  function openModal(inner, small) {
     closeModal();
     var ov = document.createElement('div');
     ov.className = 'overlay';
-    ov.innerHTML = '<div class="modal">' + inner + '</div>';
+    ov.innerHTML = '<div class="modal' + (small ? ' modal-sm' : '') + '">' + inner + '</div>';
     document.body.appendChild(ov);
     return ov;
   }
@@ -86,7 +86,8 @@
         '<div class="sheet-foot">' +
         '<button type="button" class="btn" data-confirm="no">' + esc(opts.no || '取消') + '</button>' +
         '<button type="button" class="btn ' + (opts.danger ? 'btn-danger' : 'btn-primary') + '" data-confirm="yes">' + esc(opts.yes || '确定') + '</button>' +
-        '</div></div>'
+        '</div></div>',
+        true
       );
       confirmResolve = resolve;
     });
@@ -107,6 +108,10 @@
   }
 
   // ---------- 全局事件接线（app 启动时调用一次） ----------
+  function fireModalClose(opts) {
+    if (opts && opts.onModalClose) opts.onModalClose();
+  }
+
   function wire(opts) {
     document.addEventListener('mousemove', function (e) {
       lastMouse.x = e.clientX; lastMouse.y = e.clientY;
@@ -122,10 +127,18 @@
         if (r) r(c.getAttribute('data-confirm') === 'yes');
         return;
       }
-      // 弹窗右上角关闭
-      if (e.target.closest('.modal-x')) { closeModal(); return; }
+      // 弹窗右上角关闭（sheet-x：推送设置/日志/编辑器共用）
+      if (e.target.closest('.sheet-x')) { closeModal(); fireModalClose(opts); return; }
       // 点遮罩关闭弹窗
-      if (e.target.classList && e.target.classList.contains('overlay')) { closeModal(); return; }
+      if (e.target.classList && e.target.classList.contains('overlay')) { closeModal(); fireModalClose(opts); return; }
+      // 分段控件：选中项（mac 风格 seg）
+      var segBtn = e.target.closest('.seg-btn');
+      if (segBtn) {
+        var seg = segBtn.closest('.seg');
+        $all('.seg-btn', seg).forEach(function (b) { b.classList.toggle('on', b === segBtn); });
+        if (opts && opts.onSegChange) opts.onSegChange(seg.getAttribute('data-seg'), segBtn.getAttribute('data-value'));
+        return;
+      }
       // 下拉：展开/收起
       var head = e.target.closest('.dd-head');
       if (head) {
@@ -152,7 +165,14 @@
     });
 
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { closeModal(); closeAllDd(); hideQtip(); }
+      if (e.key === 'Escape') {
+        if (document.querySelector('.overlay')) {
+          closeModal();
+          fireModalClose(opts);
+        }
+        closeAllDd();
+        hideQtip();
+      }
     });
   }
 

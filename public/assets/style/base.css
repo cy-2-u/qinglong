@@ -11,6 +11,12 @@ body {
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS：输入框字号 <16px 聚焦会触发页面自动缩放，手机上强制 16px */
+@media (max-width: 560px) {
+  input, textarea { font-size: 16px; }
 }
 
 h1, h2, h3 { font-weight: 600; line-height: 1.3; }
