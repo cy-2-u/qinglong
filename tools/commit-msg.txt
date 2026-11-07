@@ -1,9 +1,4 @@
-feat(sched): minute-level scheduling + editor frequency redesign
+style(ui): compact frequency inputs to match seg control
 
-- tasks table gains run_minute (idempotent ALTER migration; existing rows read as :00)
-- daily/monthly anchors honor H:M; hourly interval_amount is now total minutes
-  (1-1439) so every-90-minutes style schedules are expressible
-- editor: seg control on its own row, per-unit config groups, hour:minute
-  pickers, previews updated; card meta shows M:SS-style minute precision
-- unit tests migrated to minute signatures, 31 scheduling cases green
-- asset cache bump v=20261109a
+32px-tall 54px-wide centered inputs inside the freq config row (was
+inheriting the 40px full-width form style); asset bump v=20261109b

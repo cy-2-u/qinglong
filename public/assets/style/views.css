@@ -149,12 +149,19 @@
 .freq-part {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: var(--text-soft);
   font-size: 12.5px;
   white-space: nowrap;
 }
-.freq-part input { width: 58px; text-align: center; }
+.freq-part input {
+  width: 54px;
+  height: 32px;
+  padding: 0 5px;
+  font-size: 13px;
+  text-align: center;
+  border-radius: 8px;
+}
 input.freq-num { width: 58px; }
 .freq-preview {
   margin-top: 9px;
