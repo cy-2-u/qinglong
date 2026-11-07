@@ -106,3 +106,18 @@ export function healedAnchor(task, nowSec, tzOff) {
     : nextMonthlyAnchor(task.run_day == null ? 1 : task.run_day, task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
   return correct !== task.next_run_at ? correct : null;
 }
+
+// DO 闹钟时刻 = min(最近任务锚点 + eps, now + cap)，全部毫秒：
+// - 锚点未来 → 定到锚点后几秒，任务准点执行
+// - 锚点已过期 → now + 1s，立刻唤醒补跑
+// - 无启用任务 / 锚点太远 / 查询失败 → now + cap（每小时看门狗兜底）
+export function nextAlarmAt(minNextRunSec, nowMs, capMs, epsMs) {
+  let at = nowMs + capMs;
+  const t = Number(minNextRunSec);
+  if (t > 0) {
+    const dueMs = t * 1000 + epsMs;
+    if (dueMs <= nowMs) return nowMs + 1000;
+    at = Math.min(Math.max(dueMs, nowMs + 1000), nowMs + capMs);
+  }
+  return at;
+}

@@ -1,9 +1,8 @@
-refactor: rewrite pass - merge coordinator into scheduler, shared test harness, prune dead code
+fix(scheduler): align DO alarm to nearest task anchor (phase-locked :xx drift)
 
-- scheduler: absorb RunCoordinator (they only exist together); drop src/coordinator.js
-- tests: extract shared mock harness (makeCtx/jsonRes/runTests) into tools/mock.mjs
-- frontend: remove unused qtip component and its CSS; api.js rewritten
-- tools: drop cpu-bench.mjs and ci-log.ps1 (one-off, superseded); smoke adds builtins.js
-- reference/: remove vendored upstream sources (long diverged; retrievable from git history)
-- README: rewritten as a proper public-repo document
-- asset cache bump v=20261108a
+Alarm used to re-arm as now+1h, phase-locking heartbeats to whatever minute
+the DO first woke (tasks ran daily at 09:56 instead of their 09:00 anchor).
+ensureAlarm now recomputes alarm = min(nearest enabled next_run_at + 5s,
+now + 1h): tasks run seconds after their anchor regardless of minute; task
+create/update/toggle/delete trigger a recompute; hourly watchdog semantics
+unchanged. Pure decision extracted as nextAlarmAt() with 5 unit tests.

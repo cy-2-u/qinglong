@@ -1,14 +1,14 @@
 // nextrun.js 调度数学的单元测试（node 直接跑，无 workerd 依赖）
 // 用法: node tools/test-nextrun.mjs
 import assert from 'node:assert';
-import { nextDailyAnchor, nextMonthlyAnchor, advanceNext, initialNext, computeNext, healedAnchor } from '../src/nextrun.js';
+import { nextDailyAnchor, nextMonthlyAnchor, advanceNext, initialNext, computeNext, healedAnchor, nextAlarmAt } from '../src/nextrun.js';
 
 const TZ = 8 * 3600;
 const DAY = 86400;
 
 // 北京时间 y-m-d h:00 -> UTC 秒
-function bj(y, m, d, h) {
-  return Math.floor(Date.UTC(y, m - 1, d, h, 0, 0) / 1000) - TZ;
+function bj(y, m, d, h, min) {
+  return Math.floor(Date.UTC(y, m - 1, d, h, min || 0, 0) / 1000) - TZ;
 }
 
 let passed = 0;
@@ -136,6 +136,34 @@ t('healedAnchor: 多天/停用/小时任务一律不碰', () => {
   assert.strictEqual(healedAnchor({ enabled: 1, interval_unit: 'd', interval_amount: 3, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) }, now, TZ), null);
   assert.strictEqual(healedAnchor({ enabled: 0, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) }, now, TZ), null);
   assert.strictEqual(healedAnchor({ enabled: 1, interval_unit: 'h', interval_amount: 1, next_run_at: now + 3600 }, now, TZ), null);
+});
+
+// ---- nextAlarmAt：DO 闹钟 = min(最近锚点 + eps, now + cap) ----
+const CAP = 3600_000, EPS = 5000;
+t('nextAlarmAt: 未来锚点定到锚点后 5 秒（:30 的锚点也能准点）', () => {
+  const nowMs = bj(2026, 11, 1, 8) * 1000;
+  const anchor = bj(2026, 11, 1, 8, 30); // 半小时外，不被封顶钳掉
+  assert.strictEqual(nextAlarmAt(anchor, nowMs, CAP, EPS), anchor * 1000 + EPS);
+});
+t('nextAlarmAt: 锚点远于 1 小时封顶为 now + 1h（看门狗兜底）', () => {
+  const nowMs = bj(2026, 11, 1, 9, 0) * 1000;
+  const anchor = bj(2026, 11, 2, 9); // 明天，远超 1 小时
+  assert.strictEqual(nextAlarmAt(anchor, nowMs, CAP, EPS), nowMs + CAP);
+});
+t('nextAlarmAt: 锚点已过期 -> now + 1s 立即补跑', () => {
+  const nowMs = bj(2026, 11, 1, 10) * 1000;
+  const anchor = bj(2026, 11, 1, 9); // 已过期
+  assert.strictEqual(nextAlarmAt(anchor, nowMs, CAP, EPS), nowMs + 1000);
+});
+t('nextAlarmAt: 无启用任务 -> now + 1h', () => {
+  const nowMs = bj(2026, 11, 1, 10) * 1000;
+  assert.strictEqual(nextAlarmAt(null, nowMs, CAP, EPS), nowMs + CAP);
+  assert.strictEqual(nextAlarmAt(0, nowMs, CAP, EPS), nowMs + CAP);
+});
+t('nextAlarmAt: 锚点近在眼前 -> 仍定到锚点 + eps（now+2s），不早于锚点空响', () => {
+  const nowMs = bj(2026, 11, 1, 9) * 1000;
+  const anchor = bj(2026, 11, 1, 9) - 3; // 差 3 秒到锚点，锚点+5s = now+2s
+  assert.strictEqual(nextAlarmAt(anchor, nowMs, CAP, EPS), nowMs + 2000);
 });
 
 console.log('\nALL ' + passed + ' TESTS PASSED');

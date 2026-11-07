@@ -11,7 +11,7 @@ D1 存储 + Durable Object 闹钟调度 + 内置任务库 + TimelyNotify 推送�
 ## 功能
 
 - 调度：北京时间锚点（小时 / 天 / 月，间隔可调），停摆补跑一次并追平；单次天/月任务按规则重算锚点，心跳期自动纠正漂移
-- 执行：Durable Object 闹钟驱动，cron 与 `/health` 只当看门狗；单任务限时 90s，日志环形保留 200 行
+- 执行：Durable Object 闹钟对齐最近任务锚点（准点秒级），cron 与 `/health` 只当兜底；单任务限时 90s，日志环形保留 200 行
 - 通知：[TimelyNotify](https://timelynotify.oicode.cn) GET 直连，不限出口 IP；未配密钥自动跳过，单次运行上限 10 条
 - 面板：纯静态零依赖前端（无构建步骤），HMAC 签名 Cookie 登录，明暗双主题，移动端自适应
 - 安全：面板密码即 HMAC 密钥，改密码旧会话全部失效；API 全部走鉴权，`/health` 除外
@@ -19,9 +19,9 @@ D1 存储 + Durable Object 闹钟调度 + 内置任务库 + TimelyNotify 推送�
 ## 架构
 
 ```
-cron trigger (每小时) ──► /health ──► DO.ensureAlarm()    兜底上弦
+cron trigger (每小时) ──► /health ──► DO.ensureAlarm()    兜底重算
                                           │
-Durable Object TaskScheduler ◄── alarm ──┘    真调度（自续闹钟，每小时心跳）
+Durable Object TaskScheduler ◄── alarm ──┘    真调度（闹钟对齐最近任务锚点，1h 兜底）
         │ 单飞锁 RunCoordinator（心跳/手动运行互斥）
         ▼
    heartbeat ──► runner ──► 内置脚本 run(ctx) ──► 日志落 D1（环形 200 行）
@@ -30,6 +30,9 @@ Durable Object TaskScheduler ◄── alarm ──┘    真调度（自续闹�
         ▼
    D1 (tasks / logs / settings)
 ```
+
+闹钟不是"每小时固定巡逻"，而是每次重算为 `min(最近启用任务的 next_run_at + 5s, now + 1h)`：
+任务在锚点后几秒准点执行；任务增删改立即触发重算；无启用任务时退化为每小时看门狗。
 
 ## 部署
 

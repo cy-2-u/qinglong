@@ -91,6 +91,12 @@ async function getTask(db, id) {
   return db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
 }
 
+// 任务增删改后重算 DO 闹钟（最近锚点可能变了）；失败不影响接口结果，
+// cron / /health 每小时会再兜底重算。
+async function rearmQuietly(env) {
+  try { await schedulerStub(env).ensureAlarm(); } catch (e) { /* 忽略 */ }
+}
+
 // ---------- 路由 ----------
 async function route(request, env, url) {
   const method = request.method;
@@ -128,6 +134,7 @@ async function route(request, env, url) {
       const res = await db.prepare(
         'INSERT INTO tasks (name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?)'
       ).bind(t.name, t.enabled, t.script_key, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
+      await rearmQuietly(env);
       return json({ task: toClientTask(await getTask(db, res.meta.last_row_id)) });
     }
     if (id && sub === 'run' && method === 'POST') {
@@ -150,11 +157,13 @@ async function route(request, env, url) {
       await db.prepare(
         'UPDATE tasks SET name=?, enabled=?, script_key=?, params=?, interval_amount=?, interval_unit=?, run_hour=?, run_day=?, next_run_at=? WHERE id=?'
       ).bind(t.name, t.enabled, t.script_key, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next, id).run();
+      await rearmQuietly(env);
       return json({ task: toClientTask(await getTask(db, id)) });
     }
     if (id && method === 'PATCH') {
       const body = await bodyJson(request);
       await db.prepare('UPDATE tasks SET enabled=? WHERE id=?').bind(body.enabled ? 1 : 0, id).run();
+      await rearmQuietly(env);
       return json({ task: toClientTask(await getTask(db, id)) });
     }
     if (id && method === 'DELETE') {
@@ -162,6 +171,7 @@ async function route(request, env, url) {
         db.prepare('DELETE FROM logs WHERE task_id=?').bind(id),
         db.prepare('DELETE FROM tasks WHERE id=?').bind(id),
       ]);
+      await rearmQuietly(env);
       return json({ ok: true });
     }
     throw new HttpError('不支持的方法', 405);
