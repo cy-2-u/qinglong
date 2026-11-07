@@ -1,13 +1,36 @@
 // TaskScheduler DO：真正的调度器。
-// - alarm() 每小时心跳：跑到期任务，最后无条件续上下一班闹钟（先上弦再干活的变体：
-//   即使本轮崩溃，finally 也把闹钟续上；闹钟丢失时由 cron trigger /health 兜底重新上弦）。
+// - alarm() 每小时心跳：跑到期任务，finally 无条件续上下一班闹钟（本轮崩溃也不丢调度）；
+//   闹钟丢失时由 cron trigger / /health 兜底重新上弦。
 // - runTask(id) 手动运行，与心跳共用单飞锁，互不并发。
+// 单飞协调器（思路来自 UptimeFlare）：DO 同名 id 是单实例，进程内锁即全局锁。
+//   run()    同一时刻只允许一个心跳在跑，后来的调用共享同一个进行中的 Promise；
+//   mutate() 配置类操作串行排队，不并发。
 import { DurableObject } from 'cloudflare:workers';
-import { ensureReady } from './seed.js';
 import { heartbeat, runTaskById } from './runner.js';
-import { RunCoordinator } from './coordinator.js';
 
 const HOUR_MS = 3600_000;
+
+class RunCoordinator {
+  constructor() {
+    this.pending = null;
+    this.tail = Promise.resolve();
+  }
+
+  run(task) {
+    if (this.pending) return this.pending;
+    const p = this.tail.then(task);
+    this.pending = p;
+    p.finally(() => { if (this.pending === p) this.pending = null; }).catch(() => undefined);
+    this.tail = p.catch(() => undefined);
+    return p;
+  }
+
+  mutate(task) {
+    const next = this.tail.then(task);
+    this.tail = next.then(() => undefined, () => undefined);
+    return next;
+  }
+}
 
 export class TaskScheduler extends DurableObject {
   constructor(ctx, env) {

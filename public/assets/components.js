@@ -1,4 +1,4 @@
-/* UI 组件层：自定义下拉、弹窗/确认框、toast、跟随光标的提示、全局事件接线。
+/* UI 组件层：自定义下拉、分段控件、弹层/确认框、toast、全局事件接线。
    app.js 只依赖 window.UI 与 window.API，视图代码不直接操作组件内部状态。 */
 (function () {
   'use strict';
@@ -35,31 +35,12 @@
 
   function closeAllDd() { $all('.dd.open').forEach(function (d) { d.classList.remove('open'); }); }
 
-  // ---------- 跟随光标的提示 ----------
-  var qtipEl = null;
-  var lastMouse = { x: 0, y: 0 };
-
-  function placeQtip() {
-    if (!qtipEl || !qtipEl.classList.contains('show')) return;
-    var r = qtipEl.getBoundingClientRect();
-    var x = lastMouse.x + 14, y = lastMouse.y + 18;
-    if (x + r.width > window.innerWidth - 8) x = lastMouse.x - r.width - 10;
-    if (y + r.height > window.innerHeight - 8) y = lastMouse.y - r.height - 12;
-    qtipEl.style.left = x + 'px';
-    qtipEl.style.top = y + 'px';
-  }
-
-  function showQtip(text) {
-    if (!qtipEl) { qtipEl = document.createElement('div'); qtipEl.className = 'qtip'; document.body.appendChild(qtipEl); }
-    qtipEl.textContent = text;
-    qtipEl.classList.add('show');
-    placeQtip();
-  }
-
-  function hideQtip() { if (qtipEl) qtipEl.classList.remove('show'); }
-
-  // ---------- 弹窗 / 确认框 ----------
+  // ---------- 弹层 / 确认框 ----------
   var confirmResolve = null;
+
+  function fireModalClose(opts) {
+    if (opts && opts.onModalClose) opts.onModalClose();
+  }
 
   function openModal(inner, small) {
     closeModal();
@@ -108,16 +89,7 @@
   }
 
   // ---------- 全局事件接线（app 启动时调用一次） ----------
-  function fireModalClose(opts) {
-    if (opts && opts.onModalClose) opts.onModalClose();
-  }
-
   function wire(opts) {
-    document.addEventListener('mousemove', function (e) {
-      lastMouse.x = e.clientX; lastMouse.y = e.clientY;
-      placeQtip();
-    });
-
     document.addEventListener('click', function (e) {
       // 确认框按钮（组件内部消化，不进 app 的 action 分发）
       var c = e.target.closest('[data-confirm]');
@@ -159,9 +131,8 @@
         if (opts && opts.onDdChange) opts.onDdChange(item.getAttribute('data-dd'), item.getAttribute('data-value'));
         return;
       }
-      // 点击空白：收起下拉、隐藏提示
+      // 点击空白：收起下拉
       closeAllDd();
-      hideQtip();
     });
 
     document.addEventListener('keydown', function (e) {
@@ -171,16 +142,13 @@
           fireModalClose(opts);
         }
         closeAllDd();
-        hideQtip();
       }
     });
   }
 
   window.UI = {
     $: $, $all: $all, esc: esc,
-    ICONS: {},
     ddHtml: ddHtml, ddValue: ddValue, closeAllDd: closeAllDd,
-    showQtip: showQtip, hideQtip: hideQtip,
     openModal: openModal, closeModal: closeModal, confirmDialog: confirmDialog,
     toast: toast,
     wire: wire,

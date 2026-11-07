@@ -1,5 +1,5 @@
 // nextrun.js 调度数学的单元测试（node 直接跑，无 workerd 依赖）
-// 用法: node test-nextrun.mjs
+// 用法: node tools/test-nextrun.mjs
 import assert from 'node:assert';
 import { nextDailyAnchor, nextMonthlyAnchor, advanceNext, initialNext, computeNext, healedAnchor } from '../src/nextrun.js';
 

@@ -1,6 +1,7 @@
 [Console]::OutputEncoding=[System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
-$base = 'http://127.0.0.1:8787'
+$port = if ($args.Count -gt 0) { $args[0] } else { '8787' }
+$base = 'http://127.0.0.1:' + $port
 $pass = 0; $fail = 0
 function Check($name, $cond, $detail) {
   if ($cond) { $script:pass++; Write-Output "ok - $name" }

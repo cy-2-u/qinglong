@@ -288,19 +288,3 @@
 .toast-ok { background: var(--ok); color: #fff; }
 .toast-err { background: var(--err); color: #fff; }
 .toast-out { opacity: 0; transition: opacity 0.3s; }
-
-/* ---------- 光标提示 ---------- */
-.qtip {
-  position: fixed;
-  z-index: 300;
-  max-width: 260px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--text);
-  color: var(--bg);
-  font-size: 12px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.1s;
-}
-.qtip.show { opacity: 1; }

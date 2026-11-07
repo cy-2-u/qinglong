@@ -1,4 +1,9 @@
-fix(ui): hide status dot for success/waiting states
+refactor: rewrite pass - merge coordinator into scheduler, shared test harness, prune dead code
 
-green dot next to the switch read as noise; only failed (red) and running
-(amber pulse) states render a dot now, success stays silent
+- scheduler: absorb RunCoordinator (they only exist together); drop src/coordinator.js
+- tests: extract shared mock harness (makeCtx/jsonRes/runTests) into tools/mock.mjs
+- frontend: remove unused qtip component and its CSS; api.js rewritten
+- tools: drop cpu-bench.mjs and ci-log.ps1 (one-off, superseded); smoke adds builtins.js
+- reference/: remove vendored upstream sources (long diverged; retrievable from git history)
+- README: rewritten as a proper public-repo document
+- asset cache bump v=20261108a

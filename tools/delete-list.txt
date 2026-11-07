@@ -1,25 +1,11 @@
-# upload.ps1 上传时从 GitHub 仓库删除的路径（每行一个，# 开头为注释行）
-# ---- 通知模块换代遗留（MeoW 五通道 + Vercel 反代 -> TimelyNotify 直连）----
-relay/api/meow/[[...path]].js
-relay/vercel.json
-relay/README.md
-tools/live-run.mjs
-tools/run-live.ps1
-# ---- 面板重写前的旧文件 ----
-public/assets/mock.js
-tools/serve.mjs
-tools/debug-commit.ps1
-src/scripts/dnshe-renew.txt
-src/scripts/glados-checkin.txt
-# ---- relay 目录残留（.vercel 项目配置 + Vercel JSON 配置实际路径）----
-relay/.gitignore
-relay/.vercel/README.txt
-relay/.vercel/project.json
-public/assets/style.css
-# ---- 一次性诊断脚本 ----
-tools/diag-baseset.ps1
-tools/ci-probe.ps1
-tools/prod-settings-check.ps1
-tools/prod-verify.ps1
-tools/remote-tree.ps1
-tools/cleanup-remote.ps1
+# upload.ps1 上传时从 GitHub 仓库删除的路径（每行一个，# 开头为注释行）。
+# 历史条目（relay/、mock.js、旧 style.css 等）已全部删除完毕并从本清单清出。
+# 本次架构重写后的清理：
+src/coordinator.js
+tools/cpu-bench.mjs
+tools/ci-log.ps1
+reference/dnshe_LICENSE
+reference/dnshe_renew_domains.py
+reference/glados_checkin.py
+reference/uptimeflare_coordinator.ts
+reference/uptimeflare_scheduler.ts

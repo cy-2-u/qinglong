@@ -4,8 +4,8 @@ const SESSION_TTL = 30 * 86400;
 const enc = new TextEncoder();
 
 function b64url(buf) {
-  let s = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
-  return s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 async function hmacSign(password, msg) {
@@ -31,6 +31,7 @@ export async function issueCookie(env) {
   return exp + '.' + (await hmacSign(env.PANEL_PASSWORD, exp));
 }
 
+// secure=false 仅用于本地 http 调试（浏览器 localhost 有 Secure 豁免，HTTP 客户端没有）
 export function sessionCookieHeader(value, secure) {
   return 'ql_sess=' + encodeURIComponent(value) +
     '; HttpOnly' + (secure === false ? '' : '; Secure') + '; Path=/; SameSite=Lax; Max-Age=' + SESSION_TTL;

@@ -30,7 +30,7 @@ export function invalidateKeyCache() {
   cachedAt = 0;
 }
 
-// URL 路径段对冒号/斜杠敏感（沿用原 MeoW 的清洗规则）
+// URL 路径段对冒号/斜杠敏感，统一替换为 '-'
 export function safeTitle(t) {
   return String(t).replace(/[:：/]/g, '-').slice(0, 64);
 }

@@ -1,32 +1,10 @@
 // GLaDOS 签到脚本的 mock 端到端测试（node 直接跑）
 // 覆盖：签到成功 + 自动兑换 500 档、积分不足不兑换、认证失败不重试、
-// 三种 Cookie 格式、汇总日志。曾借此抓出 pushLevel 残留导致的必崩 bug。
-// 用法: node test-glados.mjs
+// 三种 Cookie 格式、汇总日志。
+// 用法: node tools/test-glados.mjs
 import assert from 'node:assert';
 import { run as runGlados } from '../src/tasks/glados-checkin.js';
-
-function makeCtx(params, fetchFn) {
-  const ctx = {
-    params: params,
-    logs: [],
-    notified: [],
-    log(m) { ctx.logs.push(String(m)); },
-    async notify(title, content) { ctx.notified.push({ title, content }); },
-    fetch: fetchFn,
-  };
-  return ctx;
-}
-
-function runScript(ctx) {
-  return runGlados(ctx);
-}
-
-let passed = 0;
-async function t(name, fn) {
-  await fn();
-  passed++;
-  console.log('ok -', name);
-}
+import { makeCtx, runTests } from './mock.mjs';
 
 // 造一个按路径路由的 mock：checkin 恒成功、status/points 可配、exchange 计数
 function gladosMock(opts) {
@@ -52,14 +30,17 @@ function gladosMock(opts) {
   return { fetchFn, state };
 }
 
+const cases = [];
+const t = (name, fn) => cases.push([name, fn]);
+
 // ---------- 场景 1：签到成功 + 积分 520 自动兑换 500 档（Cookie-Editor JSON 输入） ----------
-await t('签到成功、兑换 500 档、JSON Cookie 解析、推送汇总', async () => {
+t('签到成功、兑换 500 档、JSON Cookie 解析、推送汇总', async () => {
   const cookieJson = '[{"name":"gld:sess","value":"AAA"},{"name":"gld:sess.sig","value":"BBB"}]';
   const { fetchFn, state } = gladosMock({
     pointsBody: { points: 520, history: [{ change: 5 }], plans: { plan500: { points: 500, days: 100 } } },
   });
   const ctx = makeCtx({ cookie: cookieJson }, fetchFn);
-  await runScript(ctx);
+  await runGlados(ctx);
 
   assert.strictEqual(state.checkinAttempts, 1, '首次成功不应重试');
   assert.deepStrictEqual(state.exchangeCalls, ['planType=plan500'], '应兑换 plan500');
@@ -72,12 +53,12 @@ await t('签到成功、兑换 500 档、JSON Cookie 解析、推送汇总', asy
 });
 
 // ---------- 场景 2：积分不足 500 -> 不兑换只记日志，签到不受影响 ----------
-await t('积分不足 -> 不调用兑换接口，照常推送', async () => {
+t('积分不足 -> 不调用兑换接口，照常推送', async () => {
   const { fetchFn, state } = gladosMock({
     pointsBody: { points: 120, history: [{ change: -5 }], plans: {} },
   });
   const ctx = makeCtx({ cookie: 'gld:sess=x; gld:sess.sig=y' }, fetchFn);
-  await runScript(ctx);
+  await runGlados(ctx);
 
   assert.deepStrictEqual(state.exchangeCalls, [], '积分不足不应调兑换');
   assert.ok(ctx.logs.some((l) => l.includes('积分不足(120/500分)')), '积分不足入日志');
@@ -86,7 +67,7 @@ await t('积分不足 -> 不调用兑换接口，照常推送', async () => {
 });
 
 // ---------- 场景 3：认证失败 -> 不重试、不兑换、标题 0/1；旧 token 自动补 koa 前缀 ----------
-await t('认证失败不重试，旧 token 格式自动补前缀并告警', async () => {
+t('认证失败不重试，旧 token 格式自动补前缀并告警', async () => {
   const state2 = { checkinAttempts: 0, exchangeCalls: [] };
   const fetchFn = async (url) => {
     const path = new URL(url).pathname;
@@ -101,7 +82,7 @@ await t('认证失败不重试，旧 token 格式自动补前缀并告警', asyn
   // 旧版单 token（三段式、无 =、长度 > 50）
   const legacy = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.xxxxxxxxxxxxxxxxxxxx';
   const ctx = makeCtx({ cookie: legacy }, fetchFn);
-  await runScript(ctx);
+  await runGlados(ctx);
 
   assert.strictEqual(state2.checkinAttempts, 1, '认证失败不应重试');
   assert.deepStrictEqual(state2.exchangeCalls, [], 'points 查询失败时不应兑换');
@@ -111,4 +92,5 @@ await t('认证失败不重试，旧 token 格式自动补前缀并告警', asyn
   assert.ok(ctx.logs.some((l) => l.includes('积分不足(?/500分)')), 'points 未知时积分显示 ?');
 });
 
+const passed = await runTests(cases);
 console.log('\nALL ' + passed + ' GLADOS TESTS PASSED');

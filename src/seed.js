@@ -52,7 +52,7 @@ export async function ensureReady(env) {
   const seeded = await db.prepare("SELECT value FROM settings WHERE key='seeded'").first();
   if (!seeded) {
     // 原子认领播种权：部署后并发冷启动的多个 isolate 都会走到这里，
-    // INSERT OR IGNORE 只有一个能写入成功（meta.changes===1），避免内置任务被重复播种
+    // INSERT ON CONFLICT DO NOTHING 只有一个能写入成功，避免内置任务被重复播种
     const claim = await db.prepare(
       "INSERT INTO settings (key, value) VALUES ('seeded','1') ON CONFLICT(key) DO NOTHING"
     ).run();

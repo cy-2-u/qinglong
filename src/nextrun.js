@@ -1,6 +1,5 @@
 // next_run_at 计算：北京时间（UTC+8，可由 TZ_OFFSET 调整）锚定时刻。
 // 所有时间为秒级 Unix 时间戳。
-
 const DAY = 86400;
 
 export function tzOffsetSec(env) {
@@ -97,7 +96,7 @@ export function computeNext(task, prevAnchor, nowSec, tzOff) {
 }
 
 // 心跳期漂移自愈：单次天/月任务若 next_run_at 与规则锚点不符（时钟回拨、
-// 手动改库、历史版本写入的漂移值），返回纠正值；一致或不宜触碰返回 null。
+// 历史版本写入的漂移值），返回纠正值；一致或不宜触碰返回 null。
 export function healedAnchor(task, nowSec, tzOff) {
   if (!task.enabled || task.interval_amount !== 1) return null;
   if (task.interval_unit !== 'd' && task.interval_unit !== 'm') return null;
