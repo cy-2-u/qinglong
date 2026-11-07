@@ -44,10 +44,15 @@ t('monthly: run_day 大于当月天数时钳到月末', () => {
 });
 
 // ---- initialNext ----
-t('initial h: 每 12 小时，从 now 起算', () => {
+t('initial h: 整点创建，每 12 小时', () => {
   const now = bj(2026, 10, 31, 10);
   const task = { interval_unit: 'h', interval_amount: 12 };
   assert.strictEqual(initialNext(task, now, TZ), now + 12 * 3600);
+});
+t('initial h: 非整点创建锚点对齐整点（10:37 每 6 小时 -> 16:00）', () => {
+  const now = bj(2026, 10, 31, 10) + 37 * 60;
+  const task = { interval_unit: 'h', interval_amount: 6 };
+  assert.strictEqual(initialNext(task, now, TZ), bj(2026, 10, 31, 16));
 });
 t('initial d: 每天 9 点', () => {
   const now = bj(2026, 10, 31, 20);
@@ -131,11 +136,20 @@ t('healedAnchor: 已到期的任务不碰（交给执行路径）', () => {
   const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 10, 31, 9) };
   assert.strictEqual(healedAnchor(task, now, TZ), null);
 });
-t('healedAnchor: 多天/停用/小时任务一律不碰', () => {
+t('healedAnchor: 多天任务不碰（相位合法）', () => {
   const now = bj(2026, 10, 31, 10);
   assert.strictEqual(healedAnchor({ enabled: 1, interval_unit: 'd', interval_amount: 3, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) }, now, TZ), null);
   assert.strictEqual(healedAnchor({ enabled: 0, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) }, now, TZ), null);
-  assert.strictEqual(healedAnchor({ enabled: 1, interval_unit: 'h', interval_amount: 1, next_run_at: now + 3600 }, now, TZ), null);
+});
+t('healedAnchor: 每小时任务漂移到 :37 -> 对齐下一个整点', () => {
+  const now = bj(2026, 10, 31, 10);
+  const task = { enabled: 1, interval_unit: 'h', interval_amount: 1, next_run_at: now + 37 * 60 };
+  assert.strictEqual(healedAnchor(task, now, TZ), bj(2026, 10, 31, 11));
+});
+t('healedAnchor: 每小时任务锚点已是整点 -> null', () => {
+  const now = bj(2026, 10, 31, 10);
+  const task = { enabled: 1, interval_unit: 'h', interval_amount: 1, next_run_at: bj(2026, 10, 31, 11) };
+  assert.strictEqual(healedAnchor(task, now, TZ), null);
 });
 
 // ---- nextAlarmAt：DO 闹钟 = min(最近锚点 + eps, now + cap) ----

@@ -1,8 +1,7 @@
-fix(scheduler): align DO alarm to nearest task anchor (phase-locked :xx drift)
+fix(sched): canonicalize hourly anchors to top of hour (no minute in UI contract)
 
-Alarm used to re-arm as now+1h, phase-locking heartbeats to whatever minute
-the DO first woke (tasks ran daily at 09:56 instead of their 09:00 anchor).
-ensureAlarm now recomputes alarm = min(nearest enabled next_run_at + 5s,
-now + 1h): tasks run seconds after their anchor regardless of minute; task
-create/update/toggle/delete trigger a recompute; hourly watchdog semantics
-unchanged. Pure decision extracted as nextAlarmAt() with 5 unit tests.
+Panel exposes no minute picker, yet hourly tasks inherited the creation-
+minute phase (created 09:37 -> anchors forever at :37). initialNext for
+hourly now floors to the current hour and steps N hours from there;
+healedAnchor extends to hourly n=1 so legacy drifted anchors self-correct
+to the next full hour. Editor preview labels hourly as top-of-hour.

@@ -72,9 +72,13 @@ export function advanceNext(task, prevAnchor, nowSec, tzOff) {
 }
 
 // 新建任务的首个 next_run_at
+// 小时任务锚点规范化到整点：界面没有分钟概念，锚点一律落在 H:00。
+// 从"当前整点 + N 小时"起算（创建于 09:37、每 6 小时 → 首跑 15:00），
+// advanceNext 的整步推进保持 :00 相位不再漂移。
 export function initialNext(task, nowSec, tzOff) {
   if (task.interval_unit === 'h') {
-    return nowSec + Math.max(1, task.interval_amount | 0) * 3600;
+    const hourStart = Math.floor(nowSec / 3600) * 3600;
+    return hourStart + Math.max(1, task.interval_amount | 0) * 3600;
   }
   if (task.interval_unit === 'd') {
     return nextDailyAnchor(task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
@@ -95,15 +99,22 @@ export function computeNext(task, prevAnchor, nowSec, tzOff) {
   return advanceNext(task, prevAnchor, nowSec, tzOff);
 }
 
-// 心跳期漂移自愈：单次天/月任务若 next_run_at 与规则锚点不符（时钟回拨、
-// 历史版本写入的漂移值），返回纠正值；一致或不宜触碰返回 null。
+// 心跳期漂移自愈：单次天/月任务重算规则锚点、每小时任务对齐整点；若 next_run_at
+// 与规则不符（时钟回拨、创建时刻带入的 :xx 相位、历史版本漂移值），返回纠正值；
+// 一致或不宜触碰返回 null。多天 / 多月 / 多小时任务锚点相位合法，不碰。
 export function healedAnchor(task, nowSec, tzOff) {
   if (!task.enabled || task.interval_amount !== 1) return null;
-  if (task.interval_unit !== 'd' && task.interval_unit !== 'm') return null;
   if (!(task.next_run_at > nowSec)) return null; // 已到期 → 交给执行路径，不抢
-  const correct = task.interval_unit === 'd'
-    ? nextDailyAnchor(task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff)
-    : nextMonthlyAnchor(task.run_day == null ? 1 : task.run_day, task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
+  let correct;
+  if (task.interval_unit === 'd') {
+    correct = nextDailyAnchor(task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
+  } else if (task.interval_unit === 'm') {
+    correct = nextMonthlyAnchor(task.run_day == null ? 1 : task.run_day, task.run_hour == null ? 9 : task.run_hour, nowSec, tzOff);
+  } else if (task.interval_unit === 'h') {
+    correct = (Math.floor(nowSec / 3600) + 1) * 3600; // 下一个整点
+  } else {
+    return null;
+  }
   return correct !== task.next_run_at ? correct : null;
 }
 

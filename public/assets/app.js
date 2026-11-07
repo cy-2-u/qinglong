@@ -320,7 +320,7 @@
     var hour = Math.min(23, Math.max(0, parseInt($('#f-hour').value, 10) || 0));
     var day = Math.min(28, Math.max(1, parseInt($('#f-day').value, 10) || 1));
     var text;
-    if (unit === 'h') text = (n === 1 ? '每小时' : '每 ' + n + ' 小时') + '运行一次';
+    if (unit === 'h') text = (n === 1 ? '每小时' : '每 ' + n + ' 小时') + ' · 整点运行';
     else if (unit === 'd') text = (n === 1 ? '每天' : '每 ' + n + ' 天') + ' · 北京时间 ' + pad(hour) + ':00';
     else text = (n === 1 ? '每月' : '每 ' + n + ' 个月') + ' ' + day + ' 日 ' + pad(hour) + ':00';
     el.textContent = text;
