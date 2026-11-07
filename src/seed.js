@@ -1,4 +1,4 @@
-// D1 建表 + 内置任务播种。ensureReady 在每个入口（API / 心跳）调用，
+// D1 建表 + 旧库迁移 + 内置任务播种。ensureReady 在每个入口（API / 心跳）调用，
 // isolate 内记忆化，成功一次后不再打数据库。
 import { initialNext, tzOffsetSec } from './nextrun.js';
 
@@ -12,6 +12,7 @@ const DDL = [
     interval_amount INTEGER NOT NULL DEFAULT 1,
     interval_unit TEXT NOT NULL DEFAULT 'd',
     run_hour INTEGER,
+    run_minute INTEGER,
     run_day INTEGER,
     last_run_at INTEGER,
     last_status TEXT NOT NULL DEFAULT 'never',
@@ -32,12 +33,12 @@ const SEED_TASKS = [
   {
     name: 'GLaDOS 签到', script_key: 'glados-checkin',
     params: { cookie: '' },
-    interval_unit: 'd', interval_amount: 1, run_hour: 9, run_day: null,
+    interval_unit: 'd', interval_amount: 1, run_hour: 9, run_minute: 0, run_day: null,
   },
   {
     name: 'DNSHE 域名续期', script_key: 'dnshe-renew',
     params: { api_key: '', api_secret: '' },
-    interval_unit: 'm', interval_amount: 1, run_hour: 9, run_day: 1,
+    interval_unit: 'm', interval_amount: 1, run_hour: 9, run_minute: 0, run_day: 1,
   },
 ];
 
@@ -48,6 +49,10 @@ export async function ensureReady(env) {
   const db = env.DB;
   if (!db) throw new Error('D1 未绑定（检查 wrangler.toml 的 database_id）');
   await db.batch(DDL.map((sql) => db.prepare(sql)));
+  // 迁移：分钟级调度引入的 run_minute 列；旧库补列，旧行按 NULL 读取视为 0 分
+  try {
+    await db.prepare('ALTER TABLE tasks ADD COLUMN run_minute INTEGER').run();
+  } catch (e) { /* 列已存在 */ }
 
   const seeded = await db.prepare("SELECT value FROM settings WHERE key='seeded'").first();
   if (!seeded) {
@@ -64,8 +69,8 @@ export async function ensureReady(env) {
         for (const t of SEED_TASKS) {
           const next = initialNext(t, now, tz);
           await db.prepare(
-            'INSERT INTO tasks (name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?)'
-          ).bind(t.name, 1, t.script_key, JSON.stringify(t.params), t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
+            'INSERT INTO tasks (name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_minute, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
+          ).bind(t.name, 1, t.script_key, JSON.stringify(t.params), t.interval_amount, t.interval_unit, t.run_hour, t.run_minute, t.run_day, next).run();
         }
       }
     }

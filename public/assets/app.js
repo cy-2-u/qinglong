@@ -60,12 +60,18 @@
 
   function freqText(t) {
     var n = t.interval_amount || 1;
-    if (t.interval_unit === 'h') return n === 1 ? '每小时' : '每 ' + n + ' 小时';
-    var h = t.run_hour == null ? 9 : t.run_hour;
-    var hh = pad(h) + ':00';
-    if (t.interval_unit === 'd') return (n === 1 ? '每天 ' : '每 ' + n + ' 天 ') + hh;
+    if (t.interval_unit === 'h') {
+      // 小时间隔 amount 为总分钟数
+      var h = Math.floor(n / 60), m = n % 60;
+      if (h && m) return '每 ' + h + ' 小时 ' + m + ' 分钟';
+      if (h) return '每 ' + h + ' 小时';
+      return '每 ' + Math.max(1, m) + ' 分钟';
+    }
+    var mm = t.run_minute == null ? 0 : t.run_minute;
+    var hm = pad(t.run_hour == null ? 9 : t.run_hour) + ':' + pad(mm);
+    if (t.interval_unit === 'd') return (n === 1 ? '每天 ' : '每 ' + n + ' 天 ') + hm;
     var d = t.run_day == null ? 1 : t.run_day;
-    return (n === 1 ? '每月 ' : '每 ' + n + ' 个月 ') + d + ' 日 ' + hh;
+    return (n === 1 ? '每月 ' : '每 ' + n + ' 个月 ') + d + ' 日 ' + hm;
   }
 
   function builtinName(key) {
@@ -238,6 +244,11 @@
     var t = state.editing;
     var unit = t ? t.interval_unit : 'd';
     var key = t ? t.script_key : (state.builtins.length ? state.builtins[0].key : '');
+    // 小时间隔 amount 为总分钟数，编辑器拆成 小时/分钟 两个输入；
+    // 非小时任务切到每小时时给默认 1 小时 0 分
+    var hh = t && t.interval_unit === 'h' ? Math.floor((t.interval_amount || 60) / 60) : 1;
+    var hm = t && t.interval_unit === 'h' ? ((t.interval_amount || 60) % 60) : 0;
+    var mm = t && t.run_minute != null ? t.run_minute : 0;
     var ov = UI.openModal(
       '<div class="sheet-head"><h2>' + (t ? '编辑任务' : '新建任务') + '</h2>' +
       '<button class="icon-btn sheet-x" title="关闭">' + ICONS.x + '</button></div>' +
@@ -247,11 +258,15 @@
 
       '<div class="sec"><label>脚本</label>' + UI.ddHtml('script', builtinItems(), key) + paramsHtml(key, t) + '</div>' +
 
-      '<div class="sec"><label>频率</label><div class="freq-row">' +
+      '<div class="sec"><label>频率</label>' +
       segHtml('unit', [{ v: 'h', label: '每小时' }, { v: 'd', label: '每天' }, { v: 'm', label: '每月' }], unit) +
-      '<span class="freq-t">间隔</span><input id="f-amount" class="freq-num" type="number" min="1" value="' + (t ? t.interval_amount : 1) + '">' +
-      '<span class="freq-t" id="f-hour-wrap">时刻</span><input id="f-hour" class="freq-num" type="number" min="0" max="23" value="' + (t && t.run_hour != null ? t.run_hour : 9) + '">' +
-      '<span class="freq-t" id="f-day-wrap">日期</span><input id="f-day" class="freq-num" type="number" min="1" max="28" value="' + (t && t.run_day != null ? t.run_day : 1) + '">' +
+      '<div class="freq-cfg">' +
+      '<span class="freq-part" id="f-h-part">间隔<input id="f-hh" class="freq-num" type="number" min="0" max="23" value="' + hh + '">小时' +
+      '<input id="f-hm" class="freq-num" type="number" min="0" max="59" value="' + hm + '">分钟</span>' +
+      '<span class="freq-part" id="f-dm-part">间隔<input id="f-amount" class="freq-num" type="number" min="1" value="' + (t ? t.interval_amount : 1) + '"><span id="f-unit-word">天</span></span>' +
+      '<span class="freq-part" id="f-day-part">日期<input id="f-day" class="freq-num" type="number" min="1" max="28" value="' + (t && t.run_day != null ? t.run_day : 1) + '">日</span>' +
+      '<span class="freq-part" id="f-hm-part">时刻<input id="f-hour" class="freq-num" type="number" min="0" max="23" value="' + (t && t.run_hour != null ? t.run_hour : 9) + '">:' +
+      '<input id="f-minute" class="freq-num" type="number" min="0" max="59" value="' + mm + '"></span>' +
       '</div><div class="freq-preview" id="freq-preview"></div></div>' +
 
       '<div class="sec sec-inline"><label>启用</label>' +
@@ -301,29 +316,51 @@
     return null;
   }
 
+  function showPart(id, show) {
+    var el = $(id);
+    if (el) el.classList.toggle('hidden', !show);
+  }
+
   function syncUnitFields() {
     var unit = segValue('unit') || 'd';
-    var hw = $('#f-hour-wrap'), dw = $('#f-day-wrap'), hi = $('#f-hour'), di = $('#f-day');
-    if (hw) hw.classList.toggle('hidden', unit === 'h');  // 时刻：天/月都要
-    if (dw) dw.classList.toggle('hidden', unit !== 'm');
-    if (hi) hi.classList.toggle('hidden', unit === 'h');
-    if (di) di.classList.toggle('hidden', unit !== 'm');
+    showPart('#f-h-part', unit === 'h');
+    showPart('#f-dm-part', unit !== 'h');
+    showPart('#f-day-part', unit === 'm');
+    showPart('#f-hm-part', unit !== 'h');
+    var word = $('#f-unit-word');
+    if (word) word.textContent = unit === 'm' ? '月' : '天';
     var amount = $('#f-amount');
     if (amount) amount.max = UNITS[unit] ? UNITS[unit].max : 30;
   }
+
+  function fmtHM(h, m) { return pad(h) + ':' + pad(m); }
 
   function updateFreqPreview() {
     var el = $('#freq-preview');
     if (!el) return;
     var unit = segValue('unit') || 'd';
-    var n = Math.max(1, Math.round(Number($('#f-amount').value) || 1));
     var hour = Math.min(23, Math.max(0, parseInt($('#f-hour').value, 10) || 0));
+    var minute = Math.min(59, Math.max(0, parseInt($('#f-minute').value, 10) || 0));
     var day = Math.min(28, Math.max(1, parseInt($('#f-day').value, 10) || 1));
     var text;
-    if (unit === 'h') text = (n === 1 ? '每小时' : '每 ' + n + ' 小时') + ' · 整点运行';
-    else if (unit === 'd') text = (n === 1 ? '每天' : '每 ' + n + ' 天') + ' · 北京时间 ' + pad(hour) + ':00';
-    else text = (n === 1 ? '每月' : '每 ' + n + ' 个月') + ' ' + day + ' 日 ' + pad(hour) + ':00';
+    if (unit === 'h') {
+      var hh = Math.min(23, Math.max(0, parseInt($('#f-hh').value, 10) || 0));
+      var hm = Math.min(59, Math.max(0, parseInt($('#f-hm').value, 10) || 0));
+      text = '自保存时刻起，每 ' + spanText(hh, hm) + '运行一次';
+    } else if (unit === 'd') {
+      var n = Math.max(1, Math.round(Number($('#f-amount').value) || 1));
+      text = (n === 1 ? '每天' : '每 ' + n + ' 天') + ' · 北京时间 ' + fmtHM(hour, minute);
+    } else {
+      var nm = Math.max(1, Math.round(Number($('#f-amount').value) || 1));
+      text = (nm === 1 ? '每月' : '每 ' + nm + ' 个月') + ' ' + day + ' 日 ' + fmtHM(hour, minute);
+    }
     el.textContent = text;
+  }
+
+  function spanText(hh, hm) {
+    if (hh && hm) return hh + ' 小时 ' + hm + ' 分钟';
+    if (hh) return hh + ' 小时';
+    return Math.max(1, hm) + ' 分钟';
   }
 
   function harvestParams() {
@@ -336,11 +373,19 @@
 
   function harvestSchedule() {
     var unit = segValue('unit') || 'd';
+    var hour = Math.min(23, Math.max(0, parseInt($('#f-hour').value, 10) || 0));
+    var minute = Math.min(59, Math.max(0, parseInt($('#f-minute').value, 10) || 0));
+    var day = Math.min(28, Math.max(1, parseInt($('#f-day').value, 10) || 1));
+    if (unit === 'h') {
+      // 间隔 = 小时 + 分钟，合计至少 1 分钟；amount 存总分钟数
+      var hh = Math.min(23, Math.max(0, parseInt($('#f-hh').value, 10) || 0));
+      var hm = Math.min(59, Math.max(0, parseInt($('#f-hm').value, 10) || 0));
+      var total = Math.min(1439, Math.max(1, hh * 60 + hm));
+      return { interval_unit: unit, interval_amount: total, run_hour: 0, run_minute: 0, run_day: 1 };
+    }
     var max = UNITS[unit] ? UNITS[unit].max : 30;
     var amount = Math.min(max, Math.max(1, Math.round(Number($('#f-amount').value) || 1)));
-    var hour = Math.min(23, Math.max(0, parseInt($('#f-hour').value, 10) || 0));
-    var day = Math.min(28, Math.max(1, parseInt($('#f-day').value, 10) || 1));
-    return { interval_unit: unit, interval_amount: amount, run_hour: unit === 'h' ? 0 : hour, run_day: unit === 'm' ? day : 1 };
+    return { interval_unit: unit, interval_amount: amount, run_hour: hour, run_minute: minute, run_day: unit === 'm' ? day : 1 };
   }
 
   async function saveEditor() {
@@ -504,7 +549,7 @@
 
   function onInput(e) {
     var el = e.target;
-    if (el.id === 'f-amount' || el.id === 'f-hour' || el.id === 'f-day') updateFreqPreview();
+    if (el.id === 'f-amount' || el.id === 'f-hour' || el.id === 'f-minute' || el.id === 'f-day' || el.id === 'f-hh' || el.id === 'f-hm') updateFreqPreview();
   }
 
   function onDdChange(ddId) {

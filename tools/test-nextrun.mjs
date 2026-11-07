@@ -6,7 +6,7 @@ import { nextDailyAnchor, nextMonthlyAnchor, advanceNext, initialNext, computeNe
 const TZ = 8 * 3600;
 const DAY = 86400;
 
-// 北京时间 y-m-d h:00 -> UTC 秒
+// 北京时间 y-m-d h:min -> UTC 秒
 function bj(y, m, d, h, min) {
   return Math.floor(Date.UTC(y, m - 1, d, h, min || 0, 0) / 1000) - TZ;
 }
@@ -21,43 +21,53 @@ function t(name, fn) {
 // ---- nextDailyAnchor ----
 t('daily: 当天 9 点未到，返回今天 9 点（北京）', () => {
   const now = bj(2026, 10, 31, 8) + 60; // 北京 10-31 08:01
-  assert.strictEqual(nextDailyAnchor(9, now, TZ), bj(2026, 10, 31, 9));
+  assert.strictEqual(nextDailyAnchor(9, 0, now, TZ), bj(2026, 10, 31, 9));
 });
 t('daily: 当天 9 点已过，返回明天 9 点', () => {
   const now = bj(2026, 10, 31, 9) + 1;
-  assert.strictEqual(nextDailyAnchor(9, now, TZ), bj(2026, 11, 1, 9));
+  assert.strictEqual(nextDailyAnchor(9, 0, now, TZ), bj(2026, 11, 1, 9));
 });
 t('daily: now 恰好等于锚点，算已过期 -> 明天', () => {
   const now = bj(2026, 10, 31, 9);
-  assert.strictEqual(nextDailyAnchor(9, now, TZ), bj(2026, 11, 1, 9));
+  assert.strictEqual(nextDailyAnchor(9, 0, now, TZ), bj(2026, 11, 1, 9));
+});
+t('daily: 分钟级锚点（每天 9:03）', () => {
+  const now = bj(2026, 10, 31, 10);
+  assert.strictEqual(nextDailyAnchor(9, 3, now, TZ), bj(2026, 11, 1, 9, 3));
+  const early = bj(2026, 10, 31, 8) + 60;
+  assert.strictEqual(nextDailyAnchor(9, 3, early, TZ), bj(2026, 10, 31, 9, 3));
 });
 
 // ---- nextMonthlyAnchor ----
 t('monthly: 本月 1 号已过，返回下月 1 号', () => {
   const now = bj(2026, 10, 31, 12);
-  assert.strictEqual(nextMonthlyAnchor(1, 9, now, TZ), bj(2026, 11, 1, 9));
+  assert.strictEqual(nextMonthlyAnchor(1, 9, 0, now, TZ), bj(2026, 11, 1, 9));
 });
 t('monthly: run_day 大于当月天数时钳到月末', () => {
   const now = bj(2026, 1, 31, 12); // 北京 1-31 12:00，1 月 31 日 9 点已过
   // 2 月没有 31 号 -> 钳到 2-28
-  assert.strictEqual(nextMonthlyAnchor(31, 9, now, TZ), bj(2026, 2, 28, 9));
+  assert.strictEqual(nextMonthlyAnchor(31, 9, 0, now, TZ), bj(2026, 2, 28, 9));
+});
+t('monthly: 分钟级锚点（每月 1 日 9:03）', () => {
+  const now = bj(2026, 10, 15, 12);
+  assert.strictEqual(nextMonthlyAnchor(1, 9, 3, now, TZ), bj(2026, 11, 1, 9, 3));
 });
 
 // ---- initialNext ----
-t('initial h: 整点创建，每 12 小时', () => {
+t('initial h: 间隔为总分钟数，自 now 起算（90 分钟）', () => {
   const now = bj(2026, 10, 31, 10);
-  const task = { interval_unit: 'h', interval_amount: 12 };
-  assert.strictEqual(initialNext(task, now, TZ), now + 12 * 3600);
+  const task = { interval_unit: 'h', interval_amount: 90 };
+  assert.strictEqual(initialNext(task, now, TZ), now + 90 * 60);
 });
-t('initial h: 非整点创建锚点对齐整点（10:37 每 6 小时 -> 16:00）', () => {
-  const now = bj(2026, 10, 31, 10) + 37 * 60;
-  const task = { interval_unit: 'h', interval_amount: 6 };
-  assert.strictEqual(initialNext(task, now, TZ), bj(2026, 10, 31, 16));
-});
-t('initial d: 每天 9 点', () => {
+t('initial d: 每天 9 点（无 run_minute 视为 0 分）', () => {
   const now = bj(2026, 10, 31, 20);
   const task = { interval_unit: 'd', interval_amount: 1, run_hour: 9 };
   assert.strictEqual(initialNext(task, now, TZ), bj(2026, 11, 1, 9));
+});
+t('initial d: 每天 9:03', () => {
+  const now = bj(2026, 10, 31, 20);
+  const task = { interval_unit: 'd', interval_amount: 1, run_hour: 9, run_minute: 3 };
+  assert.strictEqual(initialNext(task, now, TZ), bj(2026, 11, 1, 9, 3));
 });
 
 // ---- advanceNext：补跑只补一次，锚点不漂移 ----
@@ -74,12 +84,18 @@ t('daily every-3-days: 锚点 + 3 天仍过期则继续前进', () => {
   // 10-4, 10-7 ... 全部过期，最近未来槽位 10-22 9:00
   assert.strictEqual(advanceNext(task, anchor, now, TZ), bj(2026, 10, 22, 9));
 });
-t('hourly catch-up: 每 6 小时，过期多个槽位追平', () => {
+t('hourly catch-up: 每 6 小时（360 分钟），过期多个槽位追平', () => {
   const anchor = bj(2026, 10, 31, 0);
   const now = bj(2026, 10, 31, 23);
-  const task = { interval_unit: 'h', interval_amount: 6 };
+  const task = { interval_unit: 'h', interval_amount: 360 };
   // 0 点锚点，6h 步进：... 18, 次日 0 点 > 23 点
   assert.strictEqual(advanceNext(task, anchor, now, TZ), bj(2026, 11, 1, 0));
+});
+t('hourly minute-step: 每 1 小时 3 分钟（63 分钟），保持相位', () => {
+  const anchor = bj(2026, 10, 31, 10, 0);
+  const now = bj(2026, 10, 31, 10, 30);
+  const task = { interval_unit: 'h', interval_amount: 63 };
+  assert.strictEqual(advanceNext(task, anchor, now, TZ), bj(2026, 10, 31, 11, 3));
 });
 t('monthly catch-up: 每 2 月 1 号 9 点，跳过过期月份', () => {
   const anchor = bj(2026, 2, 1, 9);
@@ -102,17 +118,22 @@ t('computeNext: 单次日任务走规则锚点（漂移被拉回）', () => {
   // 旧锚点漂移到 08:00 也不影响：结果严格按规则 = 明天 9 点
   assert.strictEqual(computeNext(task, bj(2026, 10, 31, 8), now, TZ), bj(2026, 11, 1, 9));
 });
+t('computeNext: 单次日任务带分钟（9:03）', () => {
+  const now = bj(2026, 10, 31, 10);
+  const task = { interval_unit: 'd', interval_amount: 1, run_hour: 9, run_minute: 3 };
+  assert.strictEqual(computeNext(task, bj(2026, 10, 31, 9, 3), now, TZ), bj(2026, 11, 1, 9, 3));
+});
 t('computeNext: 每 3 天任务走锚点推进', () => {
   const anchor = bj(2026, 10, 20, 9);
   const now = bj(2026, 10, 20, 10);
   const task = { interval_unit: 'd', interval_amount: 3, run_hour: 9 };
   assert.strictEqual(computeNext(task, anchor, now, TZ), bj(2026, 10, 23, 9));
 });
-t('computeNext: 小时任务走锚点推进', () => {
-  const anchor = bj(2026, 10, 31, 0);
-  const now = bj(2026, 10, 31, 1);
-  const task = { interval_unit: 'h', interval_amount: 6 };
-  assert.strictEqual(computeNext(task, anchor, now, TZ), bj(2026, 10, 31, 6));
+t('computeNext: 小时任务（63 分钟间隔）走锚点推进', () => {
+  const anchor = bj(2026, 10, 31, 10, 0);
+  const now = bj(2026, 10, 31, 10, 1);
+  const task = { interval_unit: 'h', interval_amount: 63 };
+  assert.strictEqual(computeNext(task, anchor, now, TZ), bj(2026, 10, 31, 11, 3));
 });
 t('computeNext: 单次月任务走规则锚点', () => {
   const now = bj(2026, 10, 31, 12);
@@ -126,9 +147,14 @@ t('healedAnchor: 漂移的单次日任务给纠正值', () => {
   const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 11, 1, 8) };
   assert.strictEqual(healedAnchor(task, now, TZ), bj(2026, 11, 1, 9));
 });
-t('healedAnchor: 锚点正确返回 null', () => {
+t('healedAnchor: 次日任务带分钟漂移（9:37 -> 9:03）', () => {
   const now = bj(2026, 10, 31, 10);
-  const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) };
+  const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, run_minute: 3, next_run_at: bj(2026, 11, 1, 9, 37) };
+  assert.strictEqual(healedAnchor(task, now, TZ), bj(2026, 11, 1, 9, 3));
+});
+t('healedAnchor: 锚点正确（含分钟）返回 null', () => {
+  const now = bj(2026, 10, 31, 10);
+  const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, run_minute: 3, next_run_at: bj(2026, 11, 1, 9, 3) };
   assert.strictEqual(healedAnchor(task, now, TZ), null);
 });
 t('healedAnchor: 已到期的任务不碰（交给执行路径）', () => {
@@ -136,20 +162,11 @@ t('healedAnchor: 已到期的任务不碰（交给执行路径）', () => {
   const task = { enabled: 1, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 10, 31, 9) };
   assert.strictEqual(healedAnchor(task, now, TZ), null);
 });
-t('healedAnchor: 多天任务不碰（相位合法）', () => {
+t('healedAnchor: 多天任务/小时任务不碰（相位合法）', () => {
   const now = bj(2026, 10, 31, 10);
   assert.strictEqual(healedAnchor({ enabled: 1, interval_unit: 'd', interval_amount: 3, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) }, now, TZ), null);
   assert.strictEqual(healedAnchor({ enabled: 0, interval_unit: 'd', interval_amount: 1, run_hour: 9, next_run_at: bj(2026, 11, 1, 9) }, now, TZ), null);
-});
-t('healedAnchor: 每小时任务漂移到 :37 -> 对齐下一个整点', () => {
-  const now = bj(2026, 10, 31, 10);
-  const task = { enabled: 1, interval_unit: 'h', interval_amount: 1, next_run_at: now + 37 * 60 };
-  assert.strictEqual(healedAnchor(task, now, TZ), bj(2026, 10, 31, 11));
-});
-t('healedAnchor: 每小时任务锚点已是整点 -> null', () => {
-  const now = bj(2026, 10, 31, 10);
-  const task = { enabled: 1, interval_unit: 'h', interval_amount: 1, next_run_at: bj(2026, 10, 31, 11) };
-  assert.strictEqual(healedAnchor(task, now, TZ), null);
+  assert.strictEqual(healedAnchor({ enabled: 1, interval_unit: 'h', interval_amount: 90, next_run_at: now + 90 * 60 }, now, TZ), null);
 });
 
 // ---- nextAlarmAt：DO 闹钟 = min(最近锚点 + eps, now + cap) ----
@@ -160,7 +177,7 @@ t('nextAlarmAt: 未来锚点定到锚点后 5 秒（:30 的锚点也能准点）
   assert.strictEqual(nextAlarmAt(anchor, nowMs, CAP, EPS), anchor * 1000 + EPS);
 });
 t('nextAlarmAt: 锚点远于 1 小时封顶为 now + 1h（看门狗兜底）', () => {
-  const nowMs = bj(2026, 11, 1, 9, 0) * 1000;
+  const nowMs = bj(2026, 11, 1, 9) * 1000;
   const anchor = bj(2026, 11, 2, 9); // 明天，远超 1 小时
   assert.strictEqual(nextAlarmAt(anchor, nowMs, CAP, EPS), nowMs + CAP);
 });

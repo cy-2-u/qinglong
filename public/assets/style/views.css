@@ -138,14 +138,24 @@
 }
 .sec-inline > label { margin-bottom: 0; }
 
-.freq-row {
+/* 频率编辑：分段控件独占一行，配置项按单位分组在下一行 */
+.freq-cfg {
   display: flex;
   align-items: center;
-  gap: 8px 10px;
+  gap: 6px 14px;
   flex-wrap: wrap;
+  margin-top: 10px;
 }
-.freq-t { color: var(--text-soft); font-size: 12.5px; }
-input.freq-num { width: 70px; }
+.freq-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.freq-part input { width: 58px; text-align: center; }
+input.freq-num { width: 58px; }
 .freq-preview {
   margin-top: 9px;
   padding: 7px 12px;

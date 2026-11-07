@@ -37,7 +37,8 @@ function schedulerStub(env) {
 }
 
 // ---------- 任务字段校验 ----------
-const UNIT_MAX = { h: 23, d: 30, m: 12 };
+// h 的 interval_amount 语义 = 间隔总分钟数（1-1439，即最多 23 小时 59 分）
+const UNIT_MAX = { h: 1439, d: 30, m: 12 };
 
 function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 
@@ -57,6 +58,7 @@ function normalizeTask(body) {
     interval_unit: unit,
     interval_amount: clamp(Math.round(Number(body.interval_amount)) || 1, 1, UNIT_MAX[unit]),
     run_hour: unit === 'h' ? null : clamp(Math.round(Number(body.run_hour)) || 0, 0, 23),
+    run_minute: unit === 'h' ? null : clamp(Math.round(Number(body.run_minute)) || 0, 0, 59),
     run_day: unit === 'm' ? clamp(Math.round(Number(body.run_day)) || 1, 1, 28) : null,
     enabled: body.enabled ? 1 : 0,
   };
@@ -66,10 +68,11 @@ function scheduleChanged(a, b) {
   return a.interval_unit !== b.interval_unit ||
     a.interval_amount !== b.interval_amount ||
     a.run_hour !== b.run_hour ||
+    a.run_minute !== b.run_minute ||
     a.run_day !== b.run_day;
 }
 
-const TASK_COLS = 'id, name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_day, last_run_at, last_status, next_run_at';
+const TASK_COLS = 'id, name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_minute, run_day, last_run_at, last_status, next_run_at';
 
 // API 契约：params 一律以对象返回（D1 里存的是 JSON 字符串，原样返回会被
 // 前端 Object.keys 逐字符拆开）。解析失败回退为空对象，绝不抛错。
@@ -132,8 +135,8 @@ async function route(request, env, url) {
       const t = normalizeTask(await bodyJson(request));
       const next = initialNext(t, Math.floor(Date.now() / 1000), tzOffsetSec(env));
       const res = await db.prepare(
-        'INSERT INTO tasks (name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?)'
-      ).bind(t.name, t.enabled, t.script_key, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next).run();
+        'INSERT INTO tasks (name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_minute, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
+      ).bind(t.name, t.enabled, t.script_key, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_minute, t.run_day, next).run();
       await rearmQuietly(env);
       return json({ task: toClientTask(await getTask(db, res.meta.last_row_id)) });
     }
@@ -155,8 +158,8 @@ async function route(request, env, url) {
         ? initialNext(t, Math.floor(Date.now() / 1000), tzOffsetSec(env))
         : old.next_run_at;
       await db.prepare(
-        'UPDATE tasks SET name=?, enabled=?, script_key=?, params=?, interval_amount=?, interval_unit=?, run_hour=?, run_day=?, next_run_at=? WHERE id=?'
-      ).bind(t.name, t.enabled, t.script_key, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_day, next, id).run();
+        'UPDATE tasks SET name=?, enabled=?, script_key=?, params=?, interval_amount=?, interval_unit=?, run_hour=?, run_minute=?, run_day=?, next_run_at=? WHERE id=?'
+      ).bind(t.name, t.enabled, t.script_key, t.params, t.interval_amount, t.interval_unit, t.run_hour, t.run_minute, t.run_day, next, id).run();
       await rearmQuietly(env);
       return json({ task: toClientTask(await getTask(db, id)) });
     }
