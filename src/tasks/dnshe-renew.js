@@ -383,6 +383,16 @@ export async function run(ctx) {
     throw e;
   }
 
+  // 补跑任务载荷：only_ids 限定只处理上次预算耗尽时剩下的域名
+  if (P.only_ids) {
+    const only = new Set(String(P.only_ids).split(',').map(Number));
+    subdomains = subdomains.filter((s) => s && only.has(Number(s.id)));
+    if (!subdomains.length) {
+      ctx.log('补跑列表为空（域名可能已被处理），本次结束');
+      return;
+    }
+  }
+
   // 积分只是辅助信息，查不到不该让整轮续期失败
   let quotaText = '账户积分：查询失败';
   try {
@@ -444,9 +454,9 @@ export async function run(ctx) {
       renewalResults.push('[SKIP] ' + view.label + ': ' + describeRemaining(view.expiresAtSec, nowSec) + ' > ' + thresholdDays + ' 天，尚未进入续期窗口，跳过' + statusNote(view));
       report.notInWindow += 1;
     } else if (budgetLeft() < 5) {
-      // 剩余预算不够一次带重试的续期：顺延，不算失败——下个运行周期窗口还开着
-      renewalResults.push('[SKIP] ' + view.label + ': 免费版子请求预算耗尽，顺延至下次运行' + statusNote(view));
-      report.deferred.push(view.label);
+      // 剩余预算不够一次带重试的续期：顺延到补跑任务，不算失败——窗口还开着
+      renewalResults.push('[SKIP] ' + view.label + ': 免费版子请求预算耗尽，顺延至补跑任务' + statusNote(view));
+      report.deferred.push({ id: view.id, label: view.label });
     } else {
       const outcome = await renewOne(view);
       renewalResults.push(outcome.line + statusNote(view));
@@ -498,8 +508,8 @@ export async function run(ctx) {
   if (report.neverExpires) skipNotes.push(report.neverExpires + ' 个永不过期');
   if (skipNotes.length) summaryParts.push('', '跳过：' + skipNotes.join('，'));
   if (report.deferred.length) {
-    summaryParts.push('', '[~] 免费版子请求限额，顺延至下次运行');
-    report.deferred.forEach(function (l) { summaryParts.push('- ' + l); });
+    summaryParts.push('', '[~] 免费版子请求限额，顺延至补跑任务');
+    report.deferred.forEach(function (l) { summaryParts.push('- ' + l.label); });
   }
   if (report.failures.length) summaryParts.push('', '完整明细见面板运行日志');
 
@@ -507,4 +517,9 @@ export async function run(ctx) {
   await ctx.notify(title, summaryParts.join('\n'));
 
   if (hasFailure) throw new Error('存在 ' + report.failures.length + ' 个失败项，详见运行日志');
+  // 剩余项交由 runner 创建 60 秒后的补跑任务；注意：有失败项时不建链（下次定期运行兜底）
+  if (report.deferred.length && report.deferred.length < report.total) {
+    return { defer: Object.assign({}, P, { only_ids: report.deferred.map(function (l) { return l.id; }).join(',') }) };
+  }
+  if (report.deferred.length) ctx.log('警告: 预算不足以处理任何域名，请调大 sub_budget');
 }

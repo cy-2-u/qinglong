@@ -75,7 +75,8 @@ async function runOne(env, task, isManual) {
       },
       fetch: (url, init) => fetch(url, Object.assign({}, init, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })),
     };
-    await withTimeout(builtin.run(ctx), isManual ? MANUAL_TIMEOUT_MS : SCHEDULED_TIMEOUT_MS);
+    let result = null;
+    await withTimeout(builtin.run(ctx), isManual ? MANUAL_TIMEOUT_MS : SCHEDULED_TIMEOUT_MS).then((r) => { result = r; });
   } catch (e) {
     status = 'failed';
     pushLog('error', (e && e.message) || String(e));
@@ -84,15 +85,48 @@ async function runOne(env, task, isManual) {
   const finishedAt = nowSec();
   pushLog('info', '执行结束: ' + (status === 'ok' ? '成功' : '失败') + '，用时 ' + (finishedAt - startedAt) + 's');
 
+  // 补跑链：脚本返回 { defer: params }（defer 即补跑任务的 params）表示有剩余项
+  // 没跑完——60 秒后一张临时任务只跑剩余项；无剩余时临时任务自删。
+  // 零进度不建链（预算小到一项都跑不动时，由脚本侧警告调大 sub_budget），
+  // 防 60 秒无限循环。
+  const deferParams = result && result.defer && typeof result.defer === 'object' ? result.defer : null;
+  const isTemp = task.name.endsWith('（补跑）');
+  if (deferParams) pushLog('info', '预算耗尽，已排队补跑任务（60 秒后仅处理剩余项）');
+
   await flushLogs(db, task.id, logs);
-  if (isManual) {
+
+  if (isTemp && !deferParams) {
+    // 补跑完成且无剩余：临时任务自删（日志随行，结果已在推送里）
+    await db.batch([
+      db.prepare('DELETE FROM logs WHERE task_id=?').bind(task.id),
+      db.prepare('DELETE FROM tasks WHERE id=?').bind(task.id),
+    ]);
+    return status;
+  }
+
+  if (!isTemp && isManual) {
     // 手动运行不打乱调度节奏：只记录结果，不推进 next_run_at
     await db.prepare('UPDATE tasks SET last_run_at=?, last_status=? WHERE id=?')
       .bind(finishedAt, status, task.id).run();
   } else {
-    const next = computeNext(task, task.next_run_at, finishedAt, tzOffsetSec(env));
+    let next = computeNext(task, task.next_run_at, finishedAt, tzOffsetSec(env));
+    if (isTemp) next = nowSec() + 60;
     await db.prepare('UPDATE tasks SET last_run_at=?, last_status=?, next_run_at=? WHERE id=?')
       .bind(finishedAt, status, next, task.id).run();
+  }
+
+  if (deferParams && !isTemp) {
+    // 主任务产生剩余项：幂等建/更新补跑行（同名仅一张，参数刷新为最新剩余集）
+    const tempName = task.name + '（补跑）';
+    const exist = await db.prepare('SELECT id FROM tasks WHERE name=?').bind(tempName).first();
+    if (exist) {
+      await db.prepare('UPDATE tasks SET params=?, next_run_at=?, enabled=1 WHERE id=?')
+        .bind(JSON.stringify(deferParams), nowSec() + 60, exist.id).run();
+    } else {
+      await db.prepare(
+        'INSERT INTO tasks (name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_minute, run_day, next_run_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
+      ).bind(tempName, 1, task.script_key, JSON.stringify(deferParams), 1, 'h', null, null, null, nowSec() + 60).run();
+    }
   }
   return status;
 }

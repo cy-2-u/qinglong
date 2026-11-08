@@ -165,7 +165,7 @@ export async function run(ctx) {
     // 预留 10 个子请求给当前账号的最坏路径（3 域名轮询 × 重试 + 状态/积分/兑换）
     if (SUB_BUDGET - subUsed < 10) {
       deferredAccounts = cookies.length - i;
-      ctx.log('子请求预算耗尽，剩余 ' + deferredAccounts + ' 个账号顺延至下次运行');
+      ctx.log('子请求预算耗尽，剩余 ' + deferredAccounts + ' 个账号将交由补跑任务处理');
       break;
     }
     const client = makeClient(cookies[i]);
@@ -206,9 +206,15 @@ export async function run(ctx) {
   const bj = new Date(Date.now() + 8 * 3600 * 1000);
   const ts = bj.toISOString().replace('T', ' ').slice(0, 19);
   let body = blocks.join('\n\n') + '\n时间: ' + ts + ' (北京时间)';
-  if (deferredAccounts) body += '\n另有 ' + deferredAccounts + ' 个账号因免费版子请求限额顺延至下次运行';
+  if (deferredAccounts) body += '\n另有 ' + deferredAccounts + ' 个账号将顺延至补跑任务（1 分钟后）';
   await ctx.notify(
     'GLaDOS 签到 成功' + okCount + '/' + (cookies.length - deferredAccounts),
     body
   );
+  // 剩余账号交由 runner 创建 60 秒后的补跑任务——今天的签到今天补完，不隔天
+  if (deferredAccounts) {
+    console.log('DBG-SCRIPT return defer, deferredAccounts=', deferredAccounts);
+    return { defer: Object.assign({}, P, { cookie: cookies.slice(cookies.length - deferredAccounts).join('\n') }) };
+  }
+  console.log('DBG-SCRIPT no defer, deferredAccounts=', deferredAccounts, 'subUsed=', subUsed, 'SUB_BUDGET=', SUB_BUDGET);
 }

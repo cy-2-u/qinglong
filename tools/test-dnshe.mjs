@@ -162,8 +162,8 @@ t('凭据无效 -> 描述含 hint', async () => {
   assert.strictEqual(ctx.notified[0].title, 'DNSHE 域名续期失败');
 });
 
-// ---------- 场景 7：免费版子请求预算 —— 超限域名顺延而非失败 ----------
-t('预算耗尽: 剩余域名顺延至下次运行，不计失败', async () => {
+// ---------- 场景 7：免费版子请求预算 —— 超限域名返回补跑载荷而非失败 ----------
+t('预算耗尽: 返回 only_ids 补跑载荷，不计失败', async () => {
   const now = Date.now();
   const soon = bj(now + 30 * DAY);
   const domains = [];
@@ -182,17 +182,21 @@ t('预算耗尽: 剩余域名顺延至下次运行，不计失败', async () => 
     }
     return jsonRes(404, { success: false });
   };
-  // sub_budget=10：列表(1)+积分(1) 后剩 8，reserve=5 → 续 4 个，剩 16 个顺延
+  // sub_budget=10：列表(1)+积分(1) 后剩 8，reserve=5 → 续 4 个，剩 16 个进补跑载荷
   const ctx = makeCtx({ api_key: 'k', api_secret: 's', min_interval: 0, sub_budget: 10 }, fetchFn);
-  await runDnshe(ctx);
+  const result = await runDnshe(ctx);
 
   assert.strictEqual(renewCalls, 4, '预算内恰好续 4 个');
   assert.strictEqual(ctx.notified[0].title, 'DNSHE 域名自动续期报告', '顺延不算失败，标题不变');
   const s = ctx.notified[0].content;
   assert.ok(s.includes('续期成功 4，失败 0'), s);
-  assert.ok(s.includes('[~] 免费版子请求限额，顺延至下次运行'), s);
-  assert.ok(s.includes('- d20.test.com'), s);
-  assert.ok(ctx.logs.some((l) => l.includes('[SKIP] d20.test.com: 免费版子请求预算耗尽，顺延至下次运行')), '日志含顺延明细');
+  assert.ok(s.includes('[~] 免费版子请求限额，顺延至补跑任务'), s);
+  assert.ok(ctx.logs.some((l) => l.includes('[SKIP] d20.test.com: 免费版子请求预算耗尽，顺延至补跑任务')), '日志含顺延明细');
+  // 补跑载荷（defer 即补跑任务的 params）：剩余 16 个域名的 only_ids，凭据/调优参数原样透传
+  const expectedIds = Array.from({ length: 16 }, function (_, k) { return k + 5; }).join(',');
+  assert.strictEqual(result.defer.only_ids, expectedIds);
+  assert.strictEqual(result.defer.api_key, 'k');
+  assert.strictEqual(result.defer.min_interval, 0);
 });
 
 const passed = await runTests(cases);

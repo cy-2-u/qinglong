@@ -51,6 +51,9 @@ export class TaskScheduler extends DurableObject {
 
   async runTask(id) {
     await this.ensureAlarm();
-    return this.mutate(() => runTaskById(this.env, id));
+    const status = await this.mutate(() => runTaskById(this.env, id));
+    // 手动运行可能产生 60 秒后的补跑任务，收尾重算让闹钟立刻吸附过去
+    await this.ensureAlarm();
+    return status;
   }
 }
