@@ -162,5 +162,38 @@ t('凭据无效 -> 描述含 hint', async () => {
   assert.strictEqual(ctx.notified[0].title, 'DNSHE 域名续期失败');
 });
 
+// ---------- 场景 7：免费版子请求预算 —— 超限域名顺延而非失败 ----------
+t('预算耗尽: 剩余域名顺延至下次运行，不计失败', async () => {
+  const now = Date.now();
+  const soon = bj(now + 30 * DAY);
+  const domains = [];
+  for (let i = 1; i <= 20; i++) {
+    domains.push({ id: i, full_domain: 'd' + i + '.test.com', status: 'Registered', expires_at: soon, never_expires: 0 });
+  }
+  let renewCalls = 0;
+  const fetchFn = async (url, init) => {
+    if (url.includes('action=list')) {
+      return jsonRes(200, { subdomains: domains, pagination: { total: 20, has_more: false }, count: 20 });
+    }
+    if (url.includes('endpoint=quota')) return jsonRes(200, { quota: { available: 50 } });
+    if (url.includes('action=renew')) {
+      renewCalls++;
+      return jsonRes(200, { success: true, new_expires_at: bj(now + 395 * DAY), charged_amount: 0 });
+    }
+    return jsonRes(404, { success: false });
+  };
+  // sub_budget=10：列表(1)+积分(1) 后剩 8，reserve=5 → 续 4 个，剩 16 个顺延
+  const ctx = makeCtx({ api_key: 'k', api_secret: 's', min_interval: 0, sub_budget: 10 }, fetchFn);
+  await runDnshe(ctx);
+
+  assert.strictEqual(renewCalls, 4, '预算内恰好续 4 个');
+  assert.strictEqual(ctx.notified[0].title, 'DNSHE 域名自动续期报告', '顺延不算失败，标题不变');
+  const s = ctx.notified[0].content;
+  assert.ok(s.includes('续期成功 4，失败 0'), s);
+  assert.ok(s.includes('[~] 免费版子请求限额，顺延至下次运行'), s);
+  assert.ok(s.includes('- d20.test.com'), s);
+  assert.ok(ctx.logs.some((l) => l.includes('[SKIP] d20.test.com: 免费版子请求预算耗尽，顺延至下次运行')), '日志含顺延明细');
+});
+
 const passed = await runTests(cases);
 console.log('\nALL ' + passed + ' DNSHE TESTS PASSED');

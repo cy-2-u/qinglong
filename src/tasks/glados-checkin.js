@@ -1,5 +1,7 @@
-// GLaDOS 自动签到（内置库成员，移植自 reference/glados_checkin.py）
+// GLaDOS 自动签到（内置库成员，接口行为经长期生产验证）
 // 参数: cookie（多账号每行一个）· 积分≥500 自动兑换 100 天 · 每次运行推送汇总
+// 免费版 Worker 单次调用 50 个子请求上限：预算计数（默认 45），逼近上限时
+// 剩余账号顺延至下次运行（签到每日一次，顺延零损失）。
 export async function run(ctx) {
   const P = ctx.params || {};
   const raw = String(P.cookie || '').trim();
@@ -48,6 +50,12 @@ export async function run(ctx) {
 
   const cookies = raw.split(/\n|&/).map(parseCookie).filter(Boolean);
   if (!cookies.length) throw new Error('cookie 参数解析失败，请粘贴完整 Cookie');
+
+  // 子请求预算：所有出站请求统一计数，逼近上限时剩余账号顺延（签到每日一次，零损失）
+  const SUB_BUDGET = Math.max(10, Number(P.sub_budget) || 45);
+  let subUsed = 0;
+  const rawFetch = ctx.fetch;
+  ctx.fetch = async (url, init) => { subUsed++; return rawFetch(url, init); };
 
   ctx.log('已启用自动兑换: 500 积分 -> 100 天');
 
@@ -152,7 +160,14 @@ export async function run(ctx) {
 
   const blocks = [];
   let okCount = 0;
+  let deferredAccounts = 0;
   for (let i = 0; i < cookies.length; i++) {
+    // 预留 10 个子请求给当前账号的最坏路径（3 域名轮询 × 重试 + 状态/积分/兑换）
+    if (SUB_BUDGET - subUsed < 10) {
+      deferredAccounts = cookies.length - i;
+      ctx.log('子请求预算耗尽，剩余 ' + deferredAccounts + ' 个账号顺延至下次运行');
+      break;
+    }
     const client = makeClient(cookies[i]);
 
     let result = null;
@@ -190,8 +205,10 @@ export async function run(ctx) {
 
   const bj = new Date(Date.now() + 8 * 3600 * 1000);
   const ts = bj.toISOString().replace('T', ' ').slice(0, 19);
+  let body = blocks.join('\n\n') + '\n时间: ' + ts + ' (北京时间)';
+  if (deferredAccounts) body += '\n另有 ' + deferredAccounts + ' 个账号因免费版子请求限额顺延至下次运行';
   await ctx.notify(
-    'GLaDOS 签到 成功' + okCount + '/' + cookies.length,
-    blocks.join('\n\n') + '\n时间: ' + ts + ' (北京时间)'
+    'GLaDOS 签到 成功' + okCount + '/' + (cookies.length - deferredAccounts),
+    body
   );
 }

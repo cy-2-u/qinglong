@@ -5,7 +5,8 @@ import { getNotifyKey, notifyPush } from './notify.js';
 import { computeNext, healedAnchor, tzOffsetSec } from './nextrun.js';
 import { BUILTINS } from './builtins.js';
 
-const TASK_TIMEOUT_MS = 90_000;   // 单任务墙钟保险丝
+const MANUAL_TIMEOUT_MS = 90_000;     // 手动运行：边缘 100s 可见性内
+const SCHEDULED_TIMEOUT_MS = 240_000; // 定时（DO alarm 允许长墙钟，计费只看 CPU）——长节流脚本的天花板
 const FETCH_TIMEOUT_MS = 30_000;  // ctx.fetch 单请求保险丝
 const MAX_LOG_LINES = 200;        // 每任务日志环形上限（写内存与落库同一把尺子）
 const MAX_NOTIFY = 10;            // 单次运行推送上限（防脚本失控刷通知）
@@ -74,7 +75,7 @@ async function runOne(env, task, isManual) {
       },
       fetch: (url, init) => fetch(url, Object.assign({}, init, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })),
     };
-    await withTimeout(builtin.run(ctx), TASK_TIMEOUT_MS);
+    await withTimeout(builtin.run(ctx), isManual ? MANUAL_TIMEOUT_MS : SCHEDULED_TIMEOUT_MS);
   } catch (e) {
     status = 'failed';
     pushLog('error', (e && e.message) || String(e));

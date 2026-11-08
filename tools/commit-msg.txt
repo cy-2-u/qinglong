@@ -1,4 +1,13 @@
-chore: MIT license, stop clobbering repo description on every push
+feat(tasks): free-plan budget guards - subrequest accounting and defer-not-fail
 
-repo is public now: add MIT LICENSE; upload.ps1 no longer overwrites
-the description each push (metadata belongs to the repo, not the script)
+Free Workers cap single invocations at 50 subrequests; both scripts used
+to hit it blind (remaining domains/accounts reported as fetch errors).
+Now both count outgoing requests and defer the remainder to the next run
+(180-day DNSHE windows / daily checkin make deferral lossless):
+- dnshe-renew: SUB_BUDGET=45 (params: sub_budget/min_interval), deferred
+  domains get their own summary section, no failure semantics
+- glados-checkin: per-account reserve of 10, deferred accounts excluded
+  from the success denominator and noted in the push
+- runner: split wall-clock fuse - scheduled 240s (DO alarms allow long
+  wall time, billing is CPU-only) vs manual 90s (edge 100s visibility)
+- tests: budget-exhaustion cases for both scripts (7 DNSHE / 4 GLaDOS)

@@ -1,19 +1,21 @@
-// DNSHE 免费子域名自动续期（内置库成员，移植自 reference/dnshe_renew_domains.py，接口依据官方 API 文档 V2.0）
-// 参数: api_key, api_secret
+// DNSHE 免费子域名自动续期（内置库成员，接口依据官方 API 文档 V2.0）
+// 参数: api_key, api_secret（可选: sub_budget 子请求预算 / min_interval 节流秒数）
 // 流程：分页拉取全部子域名（含完整性校验）→ 按阈值判定 → 逐个续期 → 明细与摘要写日志。
-// 注意：免费版 Worker 单次调用最多 50 个子请求；域名较多时列表页 + 续期请求数要留意。
+// 免费版 Worker 单次调用 50 个子请求上限：脚本内计数预算（默认 45），逼近上限时
+// 剩余域名顺延至下次运行（180 天窗口足够宽）而非中途报错。
 export async function run(ctx) {
   const P = ctx.params || {};
   const API_KEY = String(P.api_key || '').trim();
   const API_SECRET = String(P.api_secret || '').trim();
   const BASE_URL = 'https://api005.dnshe.com/index.php?m=domain_hub';
   const thresholdDays = 180;  // 续期窗口阈值（文档：到期前 180 天开窗）
-  const minInterval = 2;      // 相邻 API 调用最小间隔（秒），防 60 次/分钟限流
   const tzOffSec = 8 * 3600;  // 到期时间按北京时间解读
   const tzLabel = 'UTC+8';
   const PAGE_SIZE = 500;   // 文档：per_page 上限 500，取上限减少翻页与限流
   const MAX_PAGES = 100;
   const LIST_FIELDS = 'id,subdomain,rootdomain,full_domain,status,expires_at,never_expires';
+  const SUB_BUDGET = Math.max(10, Number(P.sub_budget) || 45);  // 单次运行子请求预算
+  const minInterval = P.min_interval != null ? Math.max(0, Math.round(Number(P.min_interval))) : 2;  // 相邻 API 调用最小间隔（秒），防 60 次/分钟限流
   const BENIGN = { renewal_not_yet_available: 1 };
   const NORMAL_STATUS = { active: 1, registered: 1 };  // 实测返回 "Registered"，文档写 active
   const TRUE_WORDS = { '1': 1, 'true': 1, 'yes': 1, 'y': 1, 'on': 1, 't': 1 };
@@ -58,6 +60,12 @@ export async function run(ctx) {
   }
 
   const HEADERS = { 'X-API-Key': API_KEY, 'X-API-Secret': API_SECRET, 'Content-Type': 'application/json' };
+
+  // 子请求预算：所有出站请求统一计数（列表/积分/续期/重试都算），逼近上限即顺延
+  let subUsed = 0;
+  const rawFetch = ctx.fetch;
+  ctx.fetch = async (url, init) => { subUsed++; return rawFetch(url, init); };
+  const budgetLeft = () => SUB_BUDGET - subUsed;
 
   function isFailurePayload(d) {
     return d.success === false || !!d.error_code;
@@ -388,7 +396,7 @@ export async function run(ctx) {
 
   const renewalResults = [];
   const expiryLines = [];
-  const report = { total: subdomains.length, successes: [], failures: [], abnormal: [], notInWindow: 0, neverExpires: 0 };
+  const report = { total: subdomains.length, successes: [], failures: [], abnormal: [], deferred: [], notInWindow: 0, neverExpires: 0 };
   let hasFailure = false;
   const skipCount = () => report.notInWindow + report.neverExpires;
   const nowSec = Math.floor(Date.now() / 1000);
@@ -435,6 +443,10 @@ export async function run(ctx) {
     } else if (action === 'skip') {
       renewalResults.push('[SKIP] ' + view.label + ': ' + describeRemaining(view.expiresAtSec, nowSec) + ' > ' + thresholdDays + ' 天，尚未进入续期窗口，跳过' + statusNote(view));
       report.notInWindow += 1;
+    } else if (budgetLeft() < 5) {
+      // 剩余预算不够一次带重试的续期：顺延，不算失败——下个运行周期窗口还开着
+      renewalResults.push('[SKIP] ' + view.label + ': 免费版子请求预算耗尽，顺延至下次运行' + statusNote(view));
+      report.deferred.push(view.label);
     } else {
       const outcome = await renewOne(view);
       renewalResults.push(outcome.line + statusNote(view));
@@ -485,6 +497,10 @@ export async function run(ctx) {
   if (report.notInWindow) skipNotes.push(report.notInWindow + ' 个未到 ' + thresholdDays + ' 天窗口');
   if (report.neverExpires) skipNotes.push(report.neverExpires + ' 个永不过期');
   if (skipNotes.length) summaryParts.push('', '跳过：' + skipNotes.join('，'));
+  if (report.deferred.length) {
+    summaryParts.push('', '[~] 免费版子请求限额，顺延至下次运行');
+    report.deferred.forEach(function (l) { summaryParts.push('- ' + l); });
+  }
   if (report.failures.length) summaryParts.push('', '完整明细见面板运行日志');
 
   const title = hasFailure ? 'DNSHE 域名续期失败' : 'DNSHE 域名自动续期报告';

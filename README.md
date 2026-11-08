@@ -35,7 +35,8 @@ export async function run(ctx) {
 }
 ```
 
-内置脚本示例见 [src/tasks/](src/tasks/)（GLaDOS 签到 / DNSHE 续期）。
+内置脚本示例见 [src/tasks/](src/tasks/)（GLaDOS 签到 / DNSHE 续期），针对免费版 Worker
+的 50 个子请求上限内置了预算计数——逼近上限的域名/账号顺延到下次运行而非中途报错。
 
 ## 开发
 

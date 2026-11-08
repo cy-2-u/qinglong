@@ -92,5 +92,28 @@ t('认证失败不重试，旧 token 格式自动补前缀并告警', async () =
   assert.ok(ctx.logs.some((l) => l.includes('积分不足(?/500分)')), 'points 未知时积分显示 ?');
 });
 
+// ---------- 场景 4：免费版子请求预算 —— 多账号超限时剩余顺延 ----------
+t('预算耗尽: 剩余账号顺延，标题只计已处理账号', async () => {
+  const state4 = { checkinAttempts: 0, exchangeCalls: [] };
+  const fetchFn = async (url) => {
+    const path = new URL(url).pathname;
+    if (path === '/api/user/checkin') {
+      state4.checkinAttempts++;
+      return { status: 200, json: async () => ({ code: 0, message: 'checkin! got 100GB' }) };
+    }
+    if (path === '/api/user/status') return { status: 200, json: async () => ({ code: 0, data: { email: 'a@b.c', leftDays: 30 } }) };
+    if (path === '/api/user/points') return { status: 200, json: async () => ({ code: 0, points: 10 }) };
+    return { status: 404, json: async () => ({}) };
+  };
+  // sub_budget=10：账号1 消耗 3（签到+状态+积分），剩 7 < 10 → 账号2 顺延
+  const ctx = makeCtx({ cookie: 'gld:sess=a; gld:sess.sig=b\ngld:sess=c; gld:sess.sig=d', sub_budget: 10 }, fetchFn);
+  await runGlados(ctx);
+
+  assert.strictEqual(state4.checkinAttempts, 1, '只处理账号 1');
+  assert.strictEqual(ctx.notified[0].title, 'GLaDOS 签到 成功1/1', '标题只计已处理账号');
+  assert.ok(ctx.notified[0].content.includes('另有 1 个账号因免费版子请求限额顺延至下次运行'), '推送含顺延说明');
+  assert.ok(ctx.logs.some((l) => l.includes('剩余 1 个账号顺延')), '日志含顺延记录');
+});
+
 const passed = await runTests(cases);
 console.log('\nALL ' + passed + ' GLADOS TESTS PASSED');
