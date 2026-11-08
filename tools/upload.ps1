@@ -19,7 +19,7 @@ if (-not $probe) {
 } else {
   Write-Output 'REPO_EXISTS_REUSE'
 }
-gh repo edit $full --description "QingLong-style scheduled task panel on Cloudflare Workers (D1 + Durable Object)" 2>&1 | Out-Null
+# repo description/topics belong to the repo, not the push script — set once via gh repo edit
 
 # ---------- 2) bootstrap empty repo: Contents API creates the first commit on main ----------
 $headSha = gh api "repos/$full/git/ref/heads/main" --jq '.object.sha' 2>$null

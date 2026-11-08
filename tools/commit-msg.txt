@@ -1,4 +1,4 @@
-chore: remove dead --dot-wait token (dot hidden by default since states cleanup)
+chore: MIT license, stop clobbering repo description on every push
 
-final sweep: no stray scripts, no dead selectors, no unused tokens.
-Asset bump v=20261109d
+repo is public now: add MIT LICENSE; upload.ps1 no longer overwrites
+the description each push (metadata belongs to the repo, not the script)
