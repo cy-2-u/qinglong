@@ -1,11 +1,3 @@
-# upload.ps1 上传时从 GitHub 仓库删除的路径（每行一个，# 开头为注释行）。
-# 历史条目（relay/、mock.js、旧 style.css 等）已全部删除完毕并从本清单清出。
-# 本次架构重写后的清理：
-src/coordinator.js
-tools/cpu-bench.mjs
-tools/ci-log.ps1
-reference/dnshe_LICENSE
-reference/dnshe_renew_domains.py
-reference/glados_checkin.py
-reference/uptimeflare_coordinator.ts
-reference/uptimeflare_scheduler.ts
+# upload.ps1 pushes: paths below are deleted from the GitHub repo (one per line).
+# History is empty; this round removes the commit-msg scratch file (local-only now).
+tools/commit-msg.txt

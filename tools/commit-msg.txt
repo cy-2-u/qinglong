@@ -1,15 +1,6 @@
-refactor: strip dead guards - every try/catch must name its threat
+chore: tidy - drop commit-msg scratch from repo, simplify smoke
 
-- scheduler: RunCoordinator.run() had no callers; queue collapses to one
-  promise tail. Coordinator class deleted.
-- auth: drop hand-rolled constant-time loop; Workers timingSafeEqual is
-  the target runtime API (hash-aligns lengths first)
-- index: dead /api/health route, TASK_COLS vs SELECT * duplication,
-  params JSON.parse try/catch (rows only written by normalizeTask)
-- runner: parseParams silent {} fallback -> fail-fast; pushLog cap now
-  matches the 200-line DB ring; Promise.resolve wrapper and dead
-  Object.assign copies removed
-- notify: body read only on failure
-- frontend: :has() replaces modal-sm param, redundant freq-num class,
-  dead UNITS.h, duplicate builtin lookup, stale selectors
-- README cut to repo-grade minimum; asset bump v=20261110a
+- upload.ps1 takes optional message-file arg; commit-msg.txt is now
+  local-only (gitignored, excluded from upload, deleted remotely)
+- smoke.ps1: node --check parses .js as ESM directly (type:module),
+  copy-to-tmp dance removed; stray one-off probe script deleted

@@ -1,50 +1,24 @@
 [Console]::OutputEncoding=[System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$tmp = Join-Path $env:TEMP 'ql_smoke_tmp'
-if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
-New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
-# 1) scheduler math + builtin script tests
-node (Join-Path $PSScriptRoot 'test-nextrun.mjs')
-if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: nextrun'; exit 1 }
-node (Join-Path $PSScriptRoot 'test-dnshe.mjs')
-if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: dnshe'; exit 1 }
-node (Join-Path $PSScriptRoot 'test-glados.mjs')
-if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: glados'; exit 1 }
-node (Join-Path $PSScriptRoot 'test-notify.mjs')
-if ($LASTEXITCODE -ne 0) { Write-Output 'TEST_FAIL: notify'; exit 1 }
+# 1) unit + mock e2e tests
+foreach ($t in @('test-nextrun.mjs', 'test-dnshe.mjs', 'test-glados.mjs', 'test-notify.mjs')) {
+  node (Join-Path $PSScriptRoot $t)
+  if ($LASTEXITCODE -ne 0) { Write-Output "TEST_FAIL: $t"; exit 1 }
+}
 
-# 2) panel scripts (plain check)
-$panel = @('app.js', 'api.js', 'components.js')
-foreach ($f in $panel) {
-  $p = Join-Path $root 'public\assets'
-  $p = Join-Path $p $f
-  node --check $p
+# 2) syntax check everything (package.json type:module => node --check parses .js as ESM,
+#    no copy-as-.mjs dance needed)
+$files = @(
+  'src/index.js', 'src/auth.js', 'src/runner.js', 'src/scheduler.js',
+  'src/seed.js', 'src/nextrun.js', 'src/notify.js', 'src/builtins.js',
+  'src/tasks/glados-checkin.js', 'src/tasks/dnshe-renew.js',
+  'public/assets/api.js', 'public/assets/components.js', 'public/assets/app.js'
+)
+foreach ($f in $files) {
+  node --check (Join-Path $root $f)
   if ($LASTEXITCODE -ne 0) { Write-Output "SYNTAX_FAIL: $f"; exit 1 }
 }
 
-# 3) backend ESM -> copy as .mjs then check
-$esm = @('index.js', 'auth.js', 'runner.js', 'scheduler.js', 'seed.js', 'nextrun.js', 'notify.js', 'builtins.js')
-foreach ($f in $esm) {
-  $p = Join-Path $root 'src'
-  $p = Join-Path $p $f
-  $d = Join-Path $tmp ($f.Replace('.js', '.mjs'))
-  Copy-Item $p $d -Force
-  node --check $d
-  if ($LASTEXITCODE -ne 0) { Write-Output "SYNTAX_FAIL: src/$f"; exit 1 }
-}
-
-# 4) builtin task modules -> copy as .mjs then check
-$tasks = @('glados-checkin.js', 'dnshe-renew.js')
-foreach ($f in $tasks) {
-  $p = Join-Path $root 'src\tasks'
-  $p = Join-Path $p $f
-  $d = Join-Path $tmp $f
-  Copy-Item $p $d -Force
-  node --check $d
-  if ($LASTEXITCODE -ne 0) { Write-Output "SYNTAX_FAIL: tasks/$f"; exit 1 }
-}
-
-Remove-Item -Recurse -Force $tmp
 Write-Output 'SMOKE_OK'

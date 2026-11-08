@@ -44,7 +44,8 @@ $files = Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
   $rel = $_.FullName.Substring($root.Length + 1)
   $parts = $rel.Split('\')
   if ($parts | Where-Object { $excludeDirs -contains $_ }) { return $false }
-  if ($rel -eq '.dev.vars') { return $false }
+  # local-only: dev secrets + the commit-message scratch file (source of this push)
+  if ($rel -eq '.dev.vars' -or $rel -eq 'tools/commit-msg.txt') { return $false }
   return $true
 }
 Write-Output ("FILES: " + $files.Count)
@@ -98,7 +99,8 @@ $treeSha = gh api "repos/$full/git/trees" --input $jsonTree --jq '.sha' 2>$null
 if ($LASTEXITCODE -ne 0 -or -not $treeSha) { Write-Output 'TREE_FAIL'; exit 1 }
 Write-Output "TREE: $treeSha"
 
-$msgFile = Join-Path $PSScriptRoot 'commit-msg.txt'
+# commit message: first arg = custom file, default tools/commit-msg.txt (local-only scratch)
+$msgFile = if ($args.Count -gt 0) { $args[0] } else { Join-Path $PSScriptRoot 'commit-msg.txt' }
 $msg = [System.IO.File]::ReadAllText($msgFile, [System.Text.Encoding]::UTF8)
 # commit body via --input JSON: multiline -f args get mangled by PS 5.1 native arg passing
 $commitBody = @{ message = $msg; tree = $treeSha; parents = @($headSha) } | ConvertTo-Json
