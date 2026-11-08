@@ -225,7 +225,7 @@
   animation: sheet-in 0.18s ease-out;
   overflow: auto;
 }
-.modal-sm { width: min(340px, 100%); }
+.modal:has(.confirm) { width: min(340px, 100%); }
 .sheet-head {
   display: flex;
   align-items: center;

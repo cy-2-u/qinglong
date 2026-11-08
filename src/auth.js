@@ -1,5 +1,4 @@
-// 鉴权：HMAC 签名 Cookie（ql_sess=exp.sig），密钥即面板密码。
-// Cookie 30 天有效；签名绑定过期时间，改密码（换 PANEL_PASSWORD）后旧 Cookie 全部失效。
+// 鉴权：HMAC 签名 Cookie（ql_sess=exp.sig），密钥即面板密码；改密码全会话失效。
 const SESSION_TTL = 30 * 86400;
 const enc = new TextEncoder();
 
@@ -8,7 +7,7 @@ function b64url(buf) {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function hmacSign(password, msg) {
+async function hmac(password, msg) {
   const key = await crypto.subtle.importKey(
     'raw', enc.encode('ql:' + password),
     { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
@@ -16,22 +15,18 @@ async function hmacSign(password, msg) {
   return b64url(await crypto.subtle.sign('HMAC', key, enc.encode(msg)));
 }
 
-// 常数时间比较（先哈希对齐长度，避免时序侧信道）
+// 先哈希到等长再比较——CF 的 timingSafeEqual 要求等长输入，且这层同时消了时序差
 async function safeEqual(a, b) {
-  const da = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(String(a))));
-  const db = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(String(b))));
-  if (crypto.subtle.timingSafeEqual) return crypto.subtle.timingSafeEqual(da, db);
-  let d = 0;
-  for (let i = 0; i < da.length; i++) d |= da[i] ^ db[i];
-  return d === 0;
+  const h = async (s) => crypto.subtle.digest('SHA-256', enc.encode(String(s)));
+  return crypto.subtle.timingSafeEqual(await h(a), await h(b));
 }
 
 export async function issueCookie(env) {
   const exp = String(Math.floor(Date.now() / 1000) + SESSION_TTL);
-  return exp + '.' + (await hmacSign(env.PANEL_PASSWORD, exp));
+  return exp + '.' + (await hmac(env.PANEL_PASSWORD, exp));
 }
 
-// secure=false 仅用于本地 http 调试（浏览器 localhost 有 Secure 豁免，HTTP 客户端没有）
+// secure=false 仅用于本地 http 调试（浏览器 localhost 对 Secure 有豁免，HTTP 客户端没有）
 export function sessionCookieHeader(value, secure) {
   return 'ql_sess=' + encodeURIComponent(value) +
     '; HttpOnly' + (secure === false ? '' : '; Secure') + '; Path=/; SameSite=Lax; Max-Age=' + SESSION_TTL;
@@ -43,7 +38,7 @@ export async function validSession(env, value) {
   if (i <= 0) return false;
   const exp = value.slice(0, i), sig = value.slice(i + 1);
   if (!/^\d+$/.test(exp) || Number(exp) < Date.now() / 1000) return false;
-  return safeEqual(await hmacSign(env.PANEL_PASSWORD, exp), sig);
+  return safeEqual(await hmac(env.PANEL_PASSWORD, exp), sig);
 }
 
 export function getSessionCookie(request) {

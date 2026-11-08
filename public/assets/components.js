@@ -42,11 +42,11 @@
     if (opts && opts.onModalClose) opts.onModalClose();
   }
 
-  function openModal(inner, small) {
+  function openModal(inner) {
     closeModal();
     var ov = document.createElement('div');
     ov.className = 'overlay';
-    ov.innerHTML = '<div class="modal' + (small ? ' modal-sm' : '') + '">' + inner + '</div>';
+    ov.innerHTML = '<div class="modal">' + inner + '</div>';
     document.body.appendChild(ov);
     return ov;
   }
@@ -67,8 +67,7 @@
         '<div class="sheet-foot">' +
         '<button type="button" class="btn" data-confirm="no">' + esc(opts.no || '取消') + '</button>' +
         '<button type="button" class="btn ' + (opts.danger ? 'btn-danger' : 'btn-primary') + '" data-confirm="yes">' + esc(opts.yes || '确定') + '</button>' +
-        '</div></div>',
-        true
+        '</div></div>'
       );
       confirmResolve = resolve;
     });
@@ -148,7 +147,7 @@
 
   window.UI = {
     $: $, $all: $all, esc: esc,
-    ddHtml: ddHtml, ddValue: ddValue, closeAllDd: closeAllDd,
+    ddHtml: ddHtml, ddValue: ddValue,
     openModal: openModal, closeModal: closeModal, confirmDialog: confirmDialog,
     toast: toast,
     wire: wire,

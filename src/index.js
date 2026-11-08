@@ -72,16 +72,12 @@ function scheduleChanged(a, b) {
     a.run_day !== b.run_day;
 }
 
-const TASK_COLS = 'id, name, enabled, script_key, params, interval_amount, interval_unit, run_hour, run_minute, run_day, last_run_at, last_status, next_run_at';
-
 // API 契约：params 一律以对象返回（D1 里存的是 JSON 字符串，原样返回会被
 // 前端 Object.keys 逐字符拆开）。解析失败回退为空对象，绝不抛错。
 function toClientTask(row) {
   if (!row) return row;
-  let params = {};
-  try { params = JSON.parse(row.params || '{}'); } catch (e) { params = {}; }
-  if (!params || typeof params !== 'object') params = {};
-  return Object.assign({}, row, { params: params });
+  // params 由 normalizeTask 写入，恒为合法 JSON；坏库让它响亮失败
+  return Object.assign({}, row, { params: JSON.parse(row.params || '{}') });
 }
 
 async function bodyJson(request) {
@@ -106,8 +102,6 @@ async function route(request, env, url) {
   const db = env.DB;
 
   // ----- 公开 -----
-  if (url.pathname === '/api/health') return json({ ok: true, mode: 'live' });
-
   if (url.pathname === '/api/login' && method === 'POST') {
     if (!env.PANEL_PASSWORD) throw new HttpError('服务端未设置 PANEL_PASSWORD', 500);
     const body = await bodyJson(request);
@@ -128,7 +122,7 @@ async function route(request, env, url) {
     const sub = m[2] || null;
 
     if (!id && method === 'GET') {
-      const { results } = await db.prepare('SELECT ' + TASK_COLS + ' FROM tasks ORDER BY id').all();
+      const { results } = await db.prepare('SELECT * FROM tasks ORDER BY id').all();
       return json({ tasks: (results || []).map(toClientTask) });
     }
     if (!id && method === 'POST') {

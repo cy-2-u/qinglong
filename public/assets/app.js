@@ -25,9 +25,8 @@
   };
 
   var UNITS = {
-    h: { label: '小时', max: 23 },
-    d: { label: '天', max: 30 },
-    m: { label: '月', max: 12 },
+    d: { max: 30 },
+    m: { max: 12 },
   };
 
   var STATUS = {
@@ -74,11 +73,16 @@
     return (n === 1 ? '每月 ' : '每 ' + n + ' 个月 ') + d + ' 日 ' + hm;
   }
 
-  function builtinName(key) {
+  function builtinOf(key) {
     for (var i = 0; i < state.builtins.length; i++) {
-      if (state.builtins[i].key === key) return state.builtins[i].name;
+      if (state.builtins[i].key === key) return state.builtins[i];
     }
-    return key || '未知脚本';
+    return null;
+  }
+
+  function builtinName(key) {
+    var b = builtinOf(key);
+    return b ? b.name : (key || '未知脚本');
   }
 
   // ---------- 视图：登录 ----------
@@ -261,12 +265,12 @@
       '<div class="sec"><label>频率</label>' +
       segHtml('unit', [{ v: 'h', label: '每小时' }, { v: 'd', label: '每天' }, { v: 'm', label: '每月' }], unit) +
       '<div class="freq-cfg">' +
-      '<span class="freq-part" id="f-h-part">间隔<input id="f-hh" class="freq-num" type="number" min="0" max="23" value="' + hh + '">小时' +
-      '<input id="f-hm" class="freq-num" type="number" min="0" max="59" value="' + hm + '">分钟</span>' +
-      '<span class="freq-part" id="f-dm-part">间隔<input id="f-amount" class="freq-num" type="number" min="1" value="' + (t ? t.interval_amount : 1) + '"><span id="f-unit-word">天</span></span>' +
-      '<span class="freq-part" id="f-day-part">日期<input id="f-day" class="freq-num" type="number" min="1" max="28" value="' + (t && t.run_day != null ? t.run_day : 1) + '">日</span>' +
-      '<span class="freq-part" id="f-hm-part">时刻<input id="f-hour" class="freq-num" type="number" min="0" max="23" value="' + (t && t.run_hour != null ? t.run_hour : 9) + '">:' +
-      '<input id="f-minute" class="freq-num" type="number" min="0" max="59" value="' + mm + '"></span>' +
+      '<span class="freq-part" id="f-h-part">间隔<input id="f-hh" type="number" min="0" max="23" value="' + hh + '">小时' +
+      '<input id="f-hm" type="number" min="0" max="59" value="' + hm + '">分钟</span>' +
+      '<span class="freq-part" id="f-dm-part">间隔<input id="f-amount" type="number" min="1" value="' + (t ? t.interval_amount : 1) + '"><span id="f-unit-word">天</span></span>' +
+      '<span class="freq-part" id="f-day-part">日期<input id="f-day" type="number" min="1" max="28" value="' + (t && t.run_day != null ? t.run_day : 1) + '">日</span>' +
+      '<span class="freq-part" id="f-hm-part">时刻<input id="f-hour" type="number" min="0" max="23" value="' + (t && t.run_hour != null ? t.run_hour : 9) + '">:' +
+      '<input id="f-minute" type="number" min="0" max="59" value="' + mm + '"></span>' +
       '</div><div class="freq-preview" id="freq-preview"></div></div>' +
 
       '<div class="sec sec-inline"><label>启用</label>' +

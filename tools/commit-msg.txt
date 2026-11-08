@@ -1,5 +1,15 @@
-perf(ui): pause 30s polling in background tabs
+refactor: strip dead guards - every try/catch must name its threat
 
-refreshStats skips fetch while document.hidden; visibilitychange triggers
-an immediate refresh on return. Cuts idle Worker requests from a parked
-panel tab to zero. Asset bump v=20261109c
+- scheduler: RunCoordinator.run() had no callers; queue collapses to one
+  promise tail. Coordinator class deleted.
+- auth: drop hand-rolled constant-time loop; Workers timingSafeEqual is
+  the target runtime API (hash-aligns lengths first)
+- index: dead /api/health route, TASK_COLS vs SELECT * duplication,
+  params JSON.parse try/catch (rows only written by normalizeTask)
+- runner: parseParams silent {} fallback -> fail-fast; pushLog cap now
+  matches the 200-line DB ring; Promise.resolve wrapper and dead
+  Object.assign copies removed
+- notify: body read only on failure
+- frontend: :has() replaces modal-sm param, redundant freq-num class,
+  dead UNITS.h, duplicate builtin lookup, stale selectors
+- README cut to repo-grade minimum; asset bump v=20261110a
