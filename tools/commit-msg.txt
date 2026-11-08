@@ -1,4 +1,5 @@
-style(ui): compact frequency inputs to match seg control
+perf(ui): pause 30s polling in background tabs
 
-32px-tall 54px-wide centered inputs inside the freq config row (was
-inheriting the 40px full-width form style); asset bump v=20261109b
+refreshStats skips fetch while document.hidden; visibilitychange triggers
+an immediate refresh on return. Cuts idle Worker requests from a parked
+panel tab to zero. Asset bump v=20261109c

@@ -572,7 +572,8 @@
   }
 
   async function refreshStats() {
-    if (state.view !== 'list' || document.querySelector('.overlay')) return;
+    // 后台标签页不轮询（省 Worker 请求），回前台时 visibilitychange 会立即刷一次
+    if (state.view !== 'list' || document.hidden || document.querySelector('.overlay')) return;
     try {
       await loadTasks();
       for (var i = 0; i < state.tasks.length; i++) patchTaskCard(state.tasks[i]);
@@ -603,6 +604,10 @@
     document.addEventListener('click', onClick);
     document.addEventListener('change', onChange);
     document.addEventListener('input', onInput);
+    // 回到前台立即同步一次，弥补后台暂停的轮询
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) refreshStats();
+    });
     window.addEventListener('ql:unauthorized', function () {
       if (state.view !== 'login') renderLogin('登录已过期，请重新输入密码');
     });
