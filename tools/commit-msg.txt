@@ -1,6 +1,4 @@
-chore: tidy - drop commit-msg scratch from repo, simplify smoke
+chore: remove dead --dot-wait token (dot hidden by default since states cleanup)
 
-- upload.ps1 takes optional message-file arg; commit-msg.txt is now
-  local-only (gitignored, excluded from upload, deleted remotely)
-- smoke.ps1: node --check parses .js as ESM directly (type:module),
-  copy-to-tmp dance removed; stray one-off probe script deleted
+final sweep: no stray scripts, no dead selectors, no unused tokens.
+Asset bump v=20261109d
