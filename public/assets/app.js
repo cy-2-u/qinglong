@@ -313,13 +313,6 @@
     return h + '</div>';
   }
 
-  function builtinOf(key) {
-    for (var i = 0; i < state.builtins.length; i++) {
-      if (state.builtins[i].key === key) return state.builtins[i];
-    }
-    return null;
-  }
-
   function showPart(id, show) {
     var el = $(id);
     if (el) el.classList.toggle('hidden', !show);

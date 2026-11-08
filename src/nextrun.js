@@ -127,7 +127,7 @@ export function nextAlarmAt(minNextRunSec, nowMs, capMs, epsMs) {
   if (t > 0) {
     const dueMs = t * 1000 + epsMs;
     if (dueMs <= nowMs) return nowMs + 1000;
-    at = Math.min(Math.max(dueMs, nowMs + 1000), nowMs + capMs);
+    at = Math.min(dueMs, nowMs + capMs);
   }
   return at;
 }

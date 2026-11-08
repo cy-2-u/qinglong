@@ -2,7 +2,6 @@
 // 路由：
 //   GET  /health                公开，自暴露状态并给 DO 上弦
 //   POST /api/login             登录（PANEL_PASSWORD），下发签名 Cookie
-//   GET  /api/health            公开探测（面板 api.js 用）
 //   *    /api/tasks[...]        任务 CRUD / 运行 / 日志
 //   *    /api/settings[...]     全局通知设置
 //   GET  /api/builtins          内置任务库清单
