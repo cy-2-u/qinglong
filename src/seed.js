@@ -49,10 +49,14 @@ export async function ensureReady(env) {
   const db = env.DB;
   if (!db) throw new Error('D1 未绑定（检查 wrangler.toml 的 database_id）');
   await db.batch(DDL.map((sql) => db.prepare(sql)));
-  // 迁移：分钟级调度引入的 run_minute 列；旧库补列，旧行按 NULL 读取视为 0 分
+  // 迁移：分钟级调度引入的 run_minute 列；旧库补列，旧行按 NULL 读取视为 0 分。
+  // 只容忍"列已存在"——网络抖动等真故障必须冒出来，否则后续带 run_minute 的
+  // INSERT 会莫名失败（catch 掉就永远查不到原因）。
   try {
     await db.prepare('ALTER TABLE tasks ADD COLUMN run_minute INTEGER').run();
-  } catch (e) { /* 列已存在 */ }
+  } catch (e) {
+    if (!/column.*exists|duplicate column/i.test(String((e && e.message) || e))) throw e;
+  }
 
   const seeded = await db.prepare("SELECT value FROM settings WHERE key='seeded'").first();
   if (!seeded) {

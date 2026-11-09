@@ -36,7 +36,17 @@
   function closeAllDd() { $all('.dd.open').forEach(function (d) { d.classList.remove('open'); }); }
 
   // ---------- 弹层 / 确认框 ----------
+  // 确认框的 Promise 必须 settle：按钮路径在此先行 resolve，Esc/遮罩路径由
+  // closeModal 兜底 resolve(false)——否则 await confirmDialog 的调用方永久挂起
   var confirmResolve = null;
+
+  function settleConfirm(val) {
+    if (confirmResolve) {
+      var r = confirmResolve;
+      confirmResolve = null;
+      r(val);
+    }
+  }
 
   function fireModalClose(opts) {
     if (opts && opts.onModalClose) opts.onModalClose();
@@ -52,8 +62,8 @@
   }
 
   function closeModal() {
+    settleConfirm(false);
     $all('.overlay').forEach(function (o) { o.remove(); });
-    confirmResolve = null;
   }
 
   // Promise<boolean>：点「yes」resolve(true)，「no」/关闭 resolve(false)
@@ -93,9 +103,8 @@
       // 确认框按钮（组件内部消化，不进 app 的 action 分发）
       var c = e.target.closest('[data-confirm]');
       if (c) {
-        var r = confirmResolve;
         closeModal();
-        if (r) r(c.getAttribute('data-confirm') === 'yes');
+        settleConfirm(c.getAttribute('data-confirm') === 'yes');
         return;
       }
       // 弹窗右上角关闭（sheet-x：推送设置/日志/编辑器共用）

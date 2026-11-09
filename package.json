@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node tools/test-nextrun.mjs && node tools/test-dnshe.mjs && node tools/test-glados.mjs && node tools/test-notify.mjs"
+    "test": "node tools/test-nextrun.mjs && node tools/test-dnshe.mjs && node tools/test-glados.mjs && node tools/test-notify.mjs && node tools/test-runner.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

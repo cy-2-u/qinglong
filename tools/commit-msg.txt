@@ -1,10 +1,16 @@
-fix(runner): hoist result declaration out of try block
+fix: execution-chain test gap and confirm dialog deadlock
 
-let result lived inside try while the defer-chain check reads it after
-try - block scoping threw ReferenceError on every run AFTER the script
-finished (notification sent, logs flushed never, status stuck running,
-next heartbeat's crash-recovery flagged it failed and reran hourly).
+Full re-read found three issues:
+- components: confirmDialog promise never settled on Esc/overlay close
+  (await hung forever, silent dead delete button) - closeModal now
+  settles pending confirm with false
+- seed: bare catch around ALTER TABLE swallowed real failures (network
+  errors would surface later as mysterious INSERT failures) - rethrow
+  unless the error is "column already exists"
+- runner: indentation breakage left by the ReferenceError fix
 
-Introduced with 2693c84 (defer chain); unit tests missed it because
-they call scripts directly and never enter runOne. Also drop two DBG
-console.log lines from glados-checkin left over from contract debugging.
+Plus the lesson from today's incident: 48 tests called scripts directly
+and never entered runOne, so a block-scope ReferenceError shipped green.
+New test-runner.mjs drives runTaskById against an in-memory D1 (4 cases:
+happy path with anchor untouched, fail-after-notify must still finalize,
+defer temp-task creation, running short-circuit).

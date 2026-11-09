@@ -43,7 +43,7 @@ runner 自动创建 60 秒后的补跑任务只处理剩余项（跑完自删）
 ## 开发
 
 ```
-npm test                           # 31 调度 + 6 DNSHE + 3 GLaDOS + 6 通知（全 mock）
+npm test                           # 31 调度 + 7 DNSHE + 4 GLaDOS + 6 通知 + 4 执行链（全 mock）
 powershell tools/smoke.ps1         # 上项 + 全源码语法检查
 powershell tools/dev-interact.ps1  # 需先 wrangler dev：25 项 API 交互回归
 ```

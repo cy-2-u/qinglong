@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 
 # 1) unit + mock e2e tests
-foreach ($t in @('test-nextrun.mjs', 'test-dnshe.mjs', 'test-glados.mjs', 'test-notify.mjs')) {
+foreach ($t in @('test-nextrun.mjs', 'test-dnshe.mjs', 'test-glados.mjs', 'test-notify.mjs', 'test-runner.mjs')) {
   node (Join-Path $PSScriptRoot $t)
   if ($LASTEXITCODE -ne 0) { Write-Output "TEST_FAIL: $t"; exit 1 }
 }
