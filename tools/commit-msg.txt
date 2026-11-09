@@ -1,8 +1,8 @@
-fix: remove running short-circuit from manual run
+chore: pre-wrap sweep - cache-bust and dead fields
 
-Under the single-flight queue, when a manual run's turn arrives any
-genuinely running task has already finalized - so a running status seen
-there can only be an isolate crash leftover. The short-circuit never
-protected anything; it just blocked manual recovery (UI said "already
-running" while the status was a corpse). Manual run now overwrites and
-doubles as crash recovery; frontend drop the matching toast branch.
+- index.html: asset version bumped (app.js/components.js changed 4x
+  today under the stale v=20261109d)
+- app: harvestSchedule h-branch no longer sends run_hour/run_minute/
+  run_day - normalizeTask nulls them for unit=h anyway
+- delete-list.txt: completed entry removed (empty checklist remains)
+- local .wrangler/ debug cache (5MB) deleted, gitignored, no repo impact

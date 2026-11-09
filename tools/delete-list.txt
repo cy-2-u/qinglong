@@ -1,3 +1,2 @@
 # upload.ps1 pushes: paths below are deleted from the GitHub repo (one per line).
-# History is empty; this round removes the commit-msg scratch file (local-only now).
-tools/commit-msg.txt
+# 工作清单：已清空。下次要删远端文件时把路径写在这里。

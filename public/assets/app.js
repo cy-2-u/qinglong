@@ -374,11 +374,12 @@
     var minute = Math.min(59, Math.max(0, parseInt($('#f-minute').value, 10) || 0));
     var day = Math.min(28, Math.max(1, parseInt($('#f-day').value, 10) || 1));
     if (unit === 'h') {
-      // 间隔 = 小时 + 分钟，合计至少 1 分钟；amount 存总分钟数
+      // 间隔 = 小时 + 分钟，合计至少 1 分钟；amount 存总分钟数。
+      // run_hour/run_minute/run_day 不发——normalizeTask 对 h 一律置 null
       var hh = Math.min(23, Math.max(0, parseInt($('#f-hh').value, 10) || 0));
       var hm = Math.min(59, Math.max(0, parseInt($('#f-hm').value, 10) || 0));
       var total = Math.min(1439, Math.max(1, hh * 60 + hm));
-      return { interval_unit: unit, interval_amount: total, run_hour: 0, run_minute: 0, run_day: 1 };
+      return { interval_unit: unit, interval_amount: total };
     }
     var max = UNITS[unit] ? UNITS[unit].max : 30;
     var amount = Math.min(max, Math.max(1, Math.round(Number($('#f-amount').value) || 1)));

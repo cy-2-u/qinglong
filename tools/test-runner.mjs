@@ -64,7 +64,6 @@ function makeEnv() {
       },
     },
   };
-  // ensureReady 的记忆化开关：直接绕过（测试不走 seed）
   return env;
 }
 
