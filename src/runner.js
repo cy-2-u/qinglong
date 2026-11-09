@@ -164,12 +164,13 @@ export async function heartbeat(env) {
   return ran;
 }
 
-// 手动运行单个任务：只记录结果，绝不改变 next_run_at（不打乱调度节奏）
+// 手动运行单个任务：只记录结果，绝不改变 next_run_at（不打乱调度节奏）。
+// 不设 running 短路：单飞队列保证轮到本调用执行时，真在跑的任务必然已收尾，
+// 此处见到 running 只能是 isolate 崩溃残留——直接覆盖运行，兼任手动崩溃恢复。
 export async function runTaskById(env, id) {
   await ensureReady(env);
   const task = await env.DB.prepare('SELECT * FROM tasks WHERE id=?').bind(Number(id)).first();
   if (!task) throw new Error('任务不存在');
-  if (task.last_status === 'running') return 'running';
   if (!task.enabled) throw new Error('任务已停用，请先启用');
   await env.DB.prepare("UPDATE tasks SET last_status='running' WHERE id=?").bind(task.id).run();
   return runOne(env, task, true);

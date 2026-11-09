@@ -115,12 +115,13 @@ t('defer 载荷：60 秒后的补跑任务被创建', async () => {
   assert.ok(temp.next_run_at - 60 <= Math.floor(Date.now() / 1000) + 5, '60 秒后触发');
 });
 
-t('running 短路：手动运行撞上运行中任务直接返回 running', async () => {
+t('崩溃残留：状态 running 的任务手动运行直接覆盖（兼任崩溃恢复）', async () => {
   const env = makeEnv();
   env.tasks.push({ id: 1, name: 'T', enabled: 1, script_key: 'tb-ok', params: '{}', last_status: 'running', next_run_at: 999999 });
   const status = await runTaskById(env, 1);
-  assert.strictEqual(status, 'running');
-  assert.strictEqual(env.logs.length, 0, '短路不产生日志');
+  assert.strictEqual(status, 'ok');
+  assert.strictEqual(env.tasks[0].last_status, 'ok', '残留状态被真运行覆盖');
+  assert.ok(env.logs.some((l) => /执行结束/.test(l.text)), '日志正常落库');
 });
 
 const passed = await (async function () {

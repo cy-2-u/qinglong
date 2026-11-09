@@ -1,16 +1,8 @@
-fix: execution-chain test gap and confirm dialog deadlock
+fix: remove running short-circuit from manual run
 
-Full re-read found three issues:
-- components: confirmDialog promise never settled on Esc/overlay close
-  (await hung forever, silent dead delete button) - closeModal now
-  settles pending confirm with false
-- seed: bare catch around ALTER TABLE swallowed real failures (network
-  errors would surface later as mysterious INSERT failures) - rethrow
-  unless the error is "column already exists"
-- runner: indentation breakage left by the ReferenceError fix
-
-Plus the lesson from today's incident: 48 tests called scripts directly
-and never entered runOne, so a block-scope ReferenceError shipped green.
-New test-runner.mjs drives runTaskById against an in-memory D1 (4 cases:
-happy path with anchor untouched, fail-after-notify must still finalize,
-defer temp-task creation, running short-circuit).
+Under the single-flight queue, when a manual run's turn arrives any
+genuinely running task has already finalized - so a running status seen
+there can only be an isolate crash leftover. The short-circuit never
+protected anything; it just blocked manual recovery (UI said "already
+running" while the status was a corpse). Manual run now overwrites and
+doubles as crash recovery; frontend drop the matching toast branch.

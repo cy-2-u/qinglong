@@ -492,8 +492,7 @@
       if (btn) btn.disabled = true;
       try {
         var res = await API.runTask(id);
-        if (res.status === 'running') UI.toast('任务已在运行中');
-        else UI.toast(res.status === 'ok' ? '运行成功' : '运行失败', res.status === 'ok' ? 'ok' : 'err');
+        UI.toast(res.status === 'ok' ? '运行成功' : '运行失败', res.status === 'ok' ? 'ok' : 'err');
       } catch (e) { UI.toast(e.message, 'err'); }
       if (btn) btn.disabled = false;
       await refreshStats();
