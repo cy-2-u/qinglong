@@ -53,30 +53,32 @@ async function runOne(env, task, isManual) {
     return 'failed';
   }
 
-  try {
-    const key = await getNotifyKey(db);
-    let notifyCount = 0;
-    // params 由 normalizeTask 写入，恒为合法 JSON；坏库让它在这里响亮失败
-    const ctx = {
-      params: JSON.parse(task.params || '{}'),
-      log: (msg) => pushLog('info', msg),
-      notify: async (title, content) => {
-        if (++notifyCount > MAX_NOTIFY) {
-          pushLog('info', '推送次数超过上限（' + MAX_NOTIFY + ' 次），跳过');
-          return;
-        }
-        if (!key) { pushLog('info', '未配置通知密钥，跳过推送'); return; }
-        try {
-          await notifyPush(env, key, title, content);
-          pushLog('info', '通知推送成功');
-        } catch (e) {
-          pushLog('error', '推送失败: ' + ((e && e.message) || e));
-        }
-      },
-      fetch: (url, init) => fetch(url, Object.assign({}, init, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })),
-    };
+    // result 声明在 try 外：defer 判定（try 块之后）要读它，let 的块级作用域
+    // 出不了 try——曾经因此每次运行都在收尾前 ReferenceError（通知发了、日志丢了）
     let result = null;
-    await withTimeout(builtin.run(ctx), isManual ? MANUAL_TIMEOUT_MS : SCHEDULED_TIMEOUT_MS).then((r) => { result = r; });
+    try {
+      const key = await getNotifyKey(db);
+      let notifyCount = 0;
+      // params 由 normalizeTask 写入，恒为合法 JSON；坏库让它在这里响亮失败
+      const ctx = {
+        params: JSON.parse(task.params || '{}'),
+        log: (msg) => pushLog('info', msg),
+        notify: async (title, content) => {
+          if (++notifyCount > MAX_NOTIFY) {
+            pushLog('info', '推送次数超过上限（' + MAX_NOTIFY + ' 次），跳过');
+            return;
+          }
+          if (!key) { pushLog('info', '未配置通知密钥，跳过推送'); return; }
+          try {
+            await notifyPush(env, key, title, content);
+            pushLog('info', '通知推送成功');
+          } catch (e) {
+            pushLog('error', '推送失败: ' + ((e && e.message) || e));
+          }
+        },
+        fetch: (url, init) => fetch(url, Object.assign({}, init, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })),
+      };
+      await withTimeout(builtin.run(ctx), isManual ? MANUAL_TIMEOUT_MS : SCHEDULED_TIMEOUT_MS).then((r) => { result = r; });
   } catch (e) {
     status = 'failed';
     pushLog('error', (e && e.message) || String(e));

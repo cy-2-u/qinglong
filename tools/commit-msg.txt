@@ -1,6 +1,10 @@
-chore: final read-through sweep
+fix(runner): hoist result declaration out of try block
 
-- index: stale /api/health route doc line removed
-- nextrun: redundant inner clamp in nextAlarmAt (unreachable after early return)
-- app: duplicate builtinOf declaration removed; full-file review clean
-  (runner 6 run-paths, scheduler rearm points, task scripts untouched)
+let result lived inside try while the defer-chain check reads it after
+try - block scoping threw ReferenceError on every run AFTER the script
+finished (notification sent, logs flushed never, status stuck running,
+next heartbeat's crash-recovery flagged it failed and reran hourly).
+
+Introduced with 2693c84 (defer chain); unit tests missed it because
+they call scripts directly and never enter runOne. Also drop two DBG
+console.log lines from glados-checkin left over from contract debugging.

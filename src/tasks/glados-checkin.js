@@ -213,8 +213,6 @@ export async function run(ctx) {
   );
   // 剩余账号交由 runner 创建 60 秒后的补跑任务——今天的签到今天补完，不隔天
   if (deferredAccounts) {
-    console.log('DBG-SCRIPT return defer, deferredAccounts=', deferredAccounts);
     return { defer: Object.assign({}, P, { cookie: cookies.slice(cookies.length - deferredAccounts).join('\n') }) };
   }
-  console.log('DBG-SCRIPT no defer, deferredAccounts=', deferredAccounts, 'subUsed=', subUsed, 'SUB_BUDGET=', SUB_BUDGET);
 }
