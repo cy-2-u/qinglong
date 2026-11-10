@@ -101,14 +101,14 @@ t('脚本抛错：状态 failed、错误入日志（通知之后炸也必须收�
   assert.ok(env.logs.some((l) => /执行结束: 失败/.test(l.text)), '收尾行落库');
 });
 
-t('defer 载荷：60 秒后的补跑任务被创建', async () => {
+t('defer 载荷：60 秒后的补跑任务被创建（行名锚定内置脚本名）', async () => {
   const env = makeEnv();
   env.tasks.push({ id: 1, name: '主任务', enabled: 1, script_key: 'tb-defer', params: '{}', last_status: 'never', next_run_at: 999999 });
   addTestBuiltin('tb-defer', async () => ({ defer: { cookie: 'leftovers' } }));
   const status = await runTaskById(env, 1);
   assert.strictEqual(status, 'ok');
-  const temp = env.tasks.find((t) => t.name === '主任务（补跑）');
-  assert.ok(temp, '补跑任务行已建');
+  const temp = env.tasks.find((t) => t.name === '测试脚本（补跑）');
+  assert.ok(temp, '补跑任务行已建（内置名+（补跑））');
   assert.strictEqual(temp.interval_unit, 'h', '临时任务单位 h');
   const p = JSON.parse(temp.params);
   assert.strictEqual(p.cookie, 'leftovers', '载荷透传');
@@ -117,7 +117,8 @@ t('defer 载荷：60 秒后的补跑任务被创建', async () => {
 
 t('补跑任务二次 defer：自身载荷收窄为最新剩余集（只跑没跑过的）', async () => {
   const env = makeEnv();
-  env.tasks.push({ id: 1, name: 'X（补跑）', enabled: 1, script_key: 'tb-defer2', params: JSON.stringify({ cookie: 'old-full-set' }), last_status: 'never', next_run_at: 999999 });
+  // 真补跑行的名字 = 内置名+（补跑），与新 isTemp 判定一致
+  env.tasks.push({ id: 1, name: '测试脚本（补跑）', enabled: 1, script_key: 'tb-defer2', params: JSON.stringify({ cookie: 'old-full-set' }), last_status: 'never', next_run_at: 999999 });
   addTestBuiltin('tb-defer2', async () => ({ defer: { cookie: 'only-unprocessed' } }));
   const status = await runTaskById(env, 1);
   assert.strictEqual(status, 'ok');
@@ -126,6 +127,26 @@ t('补跑任务二次 defer：自身载荷收窄为最新剩余集（只跑没�
   const p = JSON.parse(env.tasks[0].params);
   assert.strictEqual(p.cookie, 'only-unprocessed', '旧全量被新剩余集替换');
   assert.ok(env.tasks[0].next_run_at > 999999, '锚点推进到 60 秒后');
+});
+
+t('isTemp 全等判定：名字带（补跑）但不等于内置名的不误入临时路径', async () => {
+  const env = makeEnv();
+  // 旧 endsWith 会误判这种名字；全等判定把它当普通任务
+  env.tasks.push({ id: 1, name: '自定义（补跑）', enabled: 1, script_key: 'tb-manual', params: '{}', last_status: 'never', next_run_at: 999999 });
+  addTestBuiltin('tb-manual', async (ctx) => { ctx.log('普通任务'); });
+  const status = await runTaskById(env, 1);
+  assert.strictEqual(status, 'ok');
+  assert.ok(env.tasks.length === 1 && env.tasks[0].next_run_at === 999999, '手动运行不动锚点，行不消失');
+});
+
+t('改名主任务 defer：补跑行名锚定内置脚本名（可被 isTemp 识别）', async () => {
+  const env = makeEnv();
+  env.tasks.push({ id: 1, name: '我改过的名字', enabled: 1, script_key: 'tb-defer3', params: '{}', last_status: 'never', next_run_at: 999999 });
+  addTestBuiltin('tb-defer3', async () => ({ defer: { cookie: 'x' } }));
+  await runTaskById(env, 1);
+  const temp = env.tasks.find((t) => t.name === '测试脚本（补跑）');
+  assert.ok(temp, '补跑行 = 内置名+（补跑），与 isTemp 判定同源');
+  assert.ok(!env.tasks.some((t) => t.name === '我改过的名字（补跑）'), '不跟随用户改名');
 });
 
 t('崩溃残留：状态 running 的任务手动运行直接覆盖（兼任崩溃恢复）', async () => {

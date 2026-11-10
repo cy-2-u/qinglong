@@ -1,8 +1,9 @@
-fix(defer): narrow catch-up task payload on re-defer
+fix(defer): temp identity from builtin name, not user-editable name
 
-The runner discarded a defer returned by the catch-up task itself and
-reran the ORIGINAL payload, reprocessing already-handled items (glados
-would re-checkin done accounts, burning subrequests). Contradicts the
-design intent: each round runs only the unprocessed set. The catch-up
-row now narrows its own params to the latest leftovers; main-task chain
-unchanged. New test pins the semantics.
+isTemp used name.endsWith("（补跑）") - user-editable. A regular task
+renamed to end with that suffix would silently enter the temp path
+(60s self-delete, next_run_at=now+60). Conversely a renamed main task's
+catch-up row was never recognized as temp, rerunning hourly forever.
+Identity is now full equality with builtin name + suffix, and the
+catch-up row name anchors to the builtin name for the same reason.
+Three tests pin the semantics.

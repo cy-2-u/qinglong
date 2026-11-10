@@ -91,8 +91,10 @@ async function runOne(env, task, isManual) {
   // 没跑完——60 秒后只处理剩余集。主任务幂等建/更新一张临时任务；补跑任务则把
   // 自身载荷收窄为最新剩余集（只跑没跑过的，已处理的不再重跑）。零进度不建链
   // （预算小到一项都跑不动时，由脚本侧警告调大 sub_budget），防 60 秒无限循环。
+  // 补跑身份看「内置名+（补跑）」全等而非 endsWith——名字是用户可编辑的，
+  // endsWith 会让普通任务误入 60s 自删/锚点写 now+60 的路径。
   const deferParams = result && result.defer && typeof result.defer === 'object' ? result.defer : null;
-  const isTemp = task.name.endsWith('（补跑）');
+  const isTemp = task.name === BUILTINS[task.script_key].name + '（补跑）';
   if (deferParams) pushLog('info', '预算耗尽，已排队补跑任务（60 秒后仅处理剩余项）');
 
   await flushLogs(db, task.id, logs);
@@ -122,8 +124,10 @@ async function runOne(env, task, isManual) {
     await db.prepare('UPDATE tasks SET params=? WHERE id=?')
       .bind(JSON.stringify(deferParams), task.id).run();
   } else if (deferParams) {
-    // 主任务产生剩余项：幂等建/更新补跑行（同名仅一张，参数刷新为最新剩余集）
-    const tempName = task.name + '（补跑）';
+    // 主任务产生剩余项：幂等建/更新补跑行（同名仅一张，参数刷新为最新剩余集）。
+    // 行名锚定内置脚本名（不跟随用户改名），与 isTemp 判定同源——否则改名后的
+    // 主任务建出的补跑行永远不被识别为 temp，每小时空转不清除。
+    const tempName = BUILTINS[task.script_key].name + '（补跑）';
     const exist = await db.prepare('SELECT id FROM tasks WHERE name=?').bind(tempName).first();
     if (exist) {
       await db.prepare('UPDATE tasks SET params=?, next_run_at=?, enabled=1 WHERE id=?')
