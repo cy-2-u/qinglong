@@ -38,6 +38,7 @@ function makeEnv() {
             if (/^UPDATE tasks SET last_status='running' WHERE id/.test(s)) { const t = find(api.b[0]); if (t) t.last_status = 'running'; return { meta: {} }; }
             if (/^UPDATE tasks SET last_run_at=\?, last_status=\? WHERE/.test(s)) { const t = find(api.b[2]); if (t) { t.last_run_at = api.b[0]; t.last_status = api.b[1]; } return { meta: {} }; }
             if (/^UPDATE tasks SET last_run_at=\?, last_status=\?, next_run_at=\? WHERE/.test(s)) { const t = find(api.b[3]); if (t) { t.last_run_at = api.b[0]; t.last_status = api.b[1]; t.next_run_at = api.b[2]; } return { meta: {} }; }
+            if (/^UPDATE tasks SET params=\? WHERE id=/.test(s)) { const t = find(api.b[1]); if (t) t.params = api.b[0]; return { meta: {} }; }
             if (/^INSERT INTO logs/.test(s)) { logs.push({ id: ++logId, task_id: api.b[0], ts: api.b[1], level: api.b[2], text: api.b[3] }); return { meta: {} }; }
             if (/^DELETE FROM logs WHERE task_id=\?$/.test(s)) { for (let i = logs.length - 1; i >= 0; i--) if (logs[i].task_id === api.b[0]) logs.splice(i, 1); return { meta: {} }; }
             if (/^DELETE FROM tasks WHERE id=\?$/.test(s)) { const i = tasks.findIndex((t) => t.id === api.b[0]); if (i >= 0) tasks.splice(i, 1); return { meta: {} }; }
@@ -112,6 +113,19 @@ t('defer 载荷：60 秒后的补跑任务被创建', async () => {
   const p = JSON.parse(temp.params);
   assert.strictEqual(p.cookie, 'leftovers', '载荷透传');
   assert.ok(temp.next_run_at - 60 <= Math.floor(Date.now() / 1000) + 5, '60 秒后触发');
+});
+
+t('补跑任务二次 defer：自身载荷收窄为最新剩余集（只跑没跑过的）', async () => {
+  const env = makeEnv();
+  env.tasks.push({ id: 1, name: 'X（补跑）', enabled: 1, script_key: 'tb-defer2', params: JSON.stringify({ cookie: 'old-full-set' }), last_status: 'never', next_run_at: 999999 });
+  addTestBuiltin('tb-defer2', async () => ({ defer: { cookie: 'only-unprocessed' } }));
+  const status = await runTaskById(env, 1);
+  assert.strictEqual(status, 'ok');
+  // 任务行还在（不新建），载荷已收窄，next_run_at = 完成时刻 + 60
+  assert.strictEqual(env.tasks.length, 1, '不产生新行');
+  const p = JSON.parse(env.tasks[0].params);
+  assert.strictEqual(p.cookie, 'only-unprocessed', '旧全量被新剩余集替换');
+  assert.ok(env.tasks[0].next_run_at > 999999, '锚点推进到 60 秒后');
 });
 
 t('崩溃残留：状态 running 的任务手动运行直接覆盖（兼任崩溃恢复）', async () => {

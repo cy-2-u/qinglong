@@ -1,8 +1,8 @@
-chore: pre-wrap sweep - cache-bust and dead fields
+fix(defer): narrow catch-up task payload on re-defer
 
-- index.html: asset version bumped (app.js/components.js changed 4x
-  today under the stale v=20261109d)
-- app: harvestSchedule h-branch no longer sends run_hour/run_minute/
-  run_day - normalizeTask nulls them for unit=h anyway
-- delete-list.txt: completed entry removed (empty checklist remains)
-- local .wrangler/ debug cache (5MB) deleted, gitignored, no repo impact
+The runner discarded a defer returned by the catch-up task itself and
+reran the ORIGINAL payload, reprocessing already-handled items (glados
+would re-checkin done accounts, burning subrequests). Contradicts the
+design intent: each round runs only the unprocessed set. The catch-up
+row now narrows its own params to the latest leftovers; main-task chain
+unchanged. New test pins the semantics.

@@ -88,9 +88,9 @@ async function runOne(env, task, isManual) {
   pushLog('info', '执行结束: ' + (status === 'ok' ? '成功' : '失败') + '，用时 ' + (finishedAt - startedAt) + 's');
 
   // 补跑链：脚本返回 { defer: params }（defer 即补跑任务的 params）表示有剩余项
-  // 没跑完——60 秒后一张临时任务只跑剩余项；无剩余时临时任务自删。
-  // 零进度不建链（预算小到一项都跑不动时，由脚本侧警告调大 sub_budget），
-  // 防 60 秒无限循环。
+  // 没跑完——60 秒后只处理剩余集。主任务幂等建/更新一张临时任务；补跑任务则把
+  // 自身载荷收窄为最新剩余集（只跑没跑过的，已处理的不再重跑）。零进度不建链
+  // （预算小到一项都跑不动时，由脚本侧警告调大 sub_budget），防 60 秒无限循环。
   const deferParams = result && result.defer && typeof result.defer === 'object' ? result.defer : null;
   const isTemp = task.name.endsWith('（补跑）');
   if (deferParams) pushLog('info', '预算耗尽，已排队补跑任务（60 秒后仅处理剩余项）');
@@ -117,7 +117,11 @@ async function runOne(env, task, isManual) {
       .bind(finishedAt, status, next, task.id).run();
   }
 
-  if (deferParams && !isTemp) {
+  if (deferParams && isTemp) {
+    // 补跑任务自身仍有剩余：载荷收窄为最新剩余集，next_run_at 已由上面置 +60
+    await db.prepare('UPDATE tasks SET params=? WHERE id=?')
+      .bind(JSON.stringify(deferParams), task.id).run();
+  } else if (deferParams) {
     // 主任务产生剩余项：幂等建/更新补跑行（同名仅一张，参数刷新为最新剩余集）
     const tempName = task.name + '（补跑）';
     const exist = await db.prepare('SELECT id FROM tasks WHERE name=?').bind(tempName).first();
