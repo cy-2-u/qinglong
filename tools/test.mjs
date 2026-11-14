@@ -111,9 +111,12 @@ test('定时队列：每 tick 只执行一个，到期锚点推进、不反复�
   let count=0;const engine=new Engine(s,p.env,{builtins:{'glados-checkin':{run:async()=>{count++;return {};}}}});
   await engine.tick();await engine.tick();assert.equal(count,1);assert.ok((await s.task(id)).next_run_at>now());p.close();
 });
-test('资源：全局预算截断、结束后请求被取消、通知状态检查',async()=>{
-  let count=0;const rt=runtime({fetcher:async()=>{count++;return json({});},budget:2});
-  await rt.fetch('https://local.test');await rt.fetch('https://local.test');await assert.rejects(()=>rt.fetch('https://local.test'),/预算/);rt.close();await assert.rejects(()=>rt.fetch('https://local.test'));assert.equal(count,2);
+test('资源：重定向拒绝、预算截断、结束后请求被取消、通知状态检查',async()=>{
+  let count=0;const rt=runtime({fetcher:async(url,init)=>{count++;assert.equal(init.redirect,'manual');return count===1?new Response(null,{status:302,headers:{location:'https://elsewhere.test'}}):json({});},budget:3});
+  await assert.rejects(()=>rt.fetch('https://local.test'),/重定向/);
+  await rt.fetch('https://local.test');await rt.fetch('https://local.test');
+  await assert.rejects(()=>rt.fetch('https://local.test'),/预算/);rt.close();
+  await assert.rejects(()=>rt.fetch('https://local.test'));assert.equal(count,3);
   await assert.rejects(()=>notify('x','test','body',async()=>json({},500)),/500/);
 });
 const sha256hex = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2,'0')).join('');
@@ -141,7 +144,7 @@ test('GLaDOS：JSON Cookie、镜像浏览器协议（挑战+SHA-256 证明+指�
   assert.ok(ctx.logs.some(l=>l.message.includes('Got 2 Points')));assert.ok(ctx.logs.some(l=>l.message.includes('积分构成')));assert.ok(ctx.logs.some(l=>l.message.includes('连续签到 4 天')));
   assert.equal(posts.length,1);
 });
-test('GLaDOS：人机验证拒绝 → 回退标准签到',async()=>{
+test('GLaDOS：人机验证拒绝 → 重试完整协议后通过',async()=>{
   let checkins=0;
   const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async(url,init)=>{
     if(url.endsWith('/checkin/challenge'))return challenge();
@@ -150,7 +153,26 @@ test('GLaDOS：人机验证拒绝 → 回退标准签到',async()=>{
     return json({points:10,history:[{change:1}]});
   });
   const result=await glados(ctx);assert.equal(result.failed,false);assert.equal(checkins,2);
+  assert.ok(ctx.logs.some(l=>l.message.includes('重试一次')));
+});
+test('GLaDOS：二次拒绝 → 回退标准签到成功',async()=>{
+  let checkins=0;
+  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async url=>{
+    if(url.endsWith('/checkin/challenge'))return challenge();
+    if(url.endsWith('/checkin')){checkins++;return checkins<3?json({code:7,reason:'turnstile',message:'verify human'}):json({code:0,points:1,message:'Checkin! Got 1 Points'});}
+    if(url.endsWith('/status'))return json({code:0,data:{leftDays:30}});
+    return json({points:10,history:[{change:1}]});
+  });
+  const result=await glados(ctx);assert.equal(result.failed,false);assert.equal(checkins,3);
   assert.ok(ctx.logs.some(l=>l.message.includes('回退标准签到')));
+});
+test('GLaDOS：标准签到也被拒 → 响亮失败，不误报成功',async()=>{
+  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async url=>{
+    if(url.endsWith('/checkin/challenge'))return challenge();
+    return json({code:0,message:'Cloudflare verification failed. Nothing was recorded — please retry.'});
+  });
+  const result=await glados(ctx);assert.equal(result.failed,true);
+  assert.match(result.content,/未被服务端记录/);assert.equal(ctx.calls,5);
 });
 test('GLaDOS：挑战接口故障 → 浏览器同款降级（直接签到）',async()=>{
   let checkins=0;

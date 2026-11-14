@@ -13,7 +13,10 @@ export function runtime({ fetcher = fetch, clock = Date.now, budget = 40, durati
       check();
       if (requests >= budget) throw new BudgetError('请求预算耗尽');
       requests++;
-      return fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) });
+      const response = await fetcher(url, { ...init, redirect: 'manual', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) });
+      // Workers 不支持 redirect:'error'；manual 下任何 3xx 都视为异常路径（重定向会绕过请求预算计数）。
+      if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) throw new Error(`请求被重定向（HTTP ${response.status || 'opaque'}），已中止`);
+      return response;
     },
     async sleep(ms) {
       check();
@@ -31,7 +34,7 @@ export async function notify(key, title, content, fetcher = fetch) {
   if (!key) return false;
   const safe = String(title).replace(/[:：/]/g, '-').slice(0, 64);
   const url = `https://timelynotify.oicode.cn/${encodeURIComponent(key)}/${encodeURIComponent(safe)}/${encodeURIComponent(String(content).slice(0, 2000))}?group=qinglong`;
-  const response = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(10000) });
+  const response = await fetcher(url, { redirect: 'manual', signal: AbortSignal.timeout(10000) });
   await response.body?.cancel();
   if (response.status !== 200) throw new Error(`通知失败 HTTP ${response.status}`);
   return true;

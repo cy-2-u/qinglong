@@ -43,8 +43,10 @@ export async function run(ctx) {
   const cookies = parseCookies(ctx.params.cookie);
   const blocks = [];
   let failures = 0, processed = 0;
+  // 服务端拒绝形态：显式 turnstile 理由，或"Cloudflare verification failed / Nothing was recorded"消息（11-13 实测）。
+  const rejected = d => d?.reason === 'turnstile' || /cloudflare verification|nothing was recorded/i.test(String(d?.message || ''));
   for (let index = 0; index < cookies.length; index++) {
-    if (!ctx.canStart(9)) break;
+    if (!ctx.canStart(10)) break;
     const cookie = cookies[index];
     const label = `账号 ${index + 1}`;
     const api = async (path, payload, form = false) => {
@@ -64,30 +66,33 @@ export async function run(ctx) {
       if (blocked(data)) throw new Error(`${data.message || data.reason}；请通过官方页面检查账号，本轮不重试`);
       return data;
     };
-    try {
-      if (!/(?:^|;\s*)(gld|koa):sess=/.test(cookie)) throw new Error('Cookie 缺少会话，请重新登录并更新完整 Cookie');
-      // 镜像浏览器 solveChallenge()：挑战失败或无 nonce 时浏览器直接 POST（载荷仅 token），行为一致。
-      let nonce = null, armed = false, t0 = Date.now();
+    // 镜像浏览器 solveChallenge()：取挑战 → 证明 → 签到；挑战不可用时浏览器直接 POST（载荷仅 token），行为一致。
+    const attempt = async () => {
+      const t0 = Date.now();
+      let nonce = null, armed = false;
       try {
         const challenge = await api('checkin/challenge');
         nonce = challenge?.nonce || null;
         armed = Boolean(challenge?.turnstile);
       } catch { nonce = null; }
-      let data;
-      if (nonce) {
-        // 服务端按挑战年龄与操作节奏识别机器；镜像前端 2.5s 下限，声明 timeout 时对齐其 15s 等待窗口。
-        const pace = armed ? 16000 : 2600;
-        const idle = pace - (Date.now() - t0);
-        if (idle > 0) await ctx.sleep(idle);
-        data = await api('checkin', { token: HOST, nonce, proof: await proofOf(nonce), tsState: armed ? 'timeout' : 'off' });
-        if (data.reason === 'turnstile') {
-          ctx.log(`${label}：人机验证未放行，回退标准签到`);
-          data = await api('checkin', { token: HOST });
-        }
-      } else {
+      if (!nonce) return api('checkin', { token: HOST });
+      // 服务端按挑战年龄与操作节奏识别机器；镜像前端 2.5s 下限，声明 timeout 时对齐其 15s 等待窗口。
+      const idle = (armed ? 16000 : 2600) - (Date.now() - t0);
+      if (idle > 0) await ctx.sleep(idle);
+      return api('checkin', { token: HOST, nonce, proof: await proofOf(nonce), tsState: armed ? 'timeout' : 'off' });
+    };
+    try {
+      if (!/(?:^|;\s*)(gld|koa):sess=/.test(cookie)) throw new Error('Cookie 缺少会话，请重新登录并更新完整 Cookie');
+      let data = await attempt();
+      if (rejected(data)) {
+        ctx.log(`${label}：人机验证未放行，按浏览器行为重试一次`);
+        data = await attempt();
+      }
+      if (rejected(data)) {
+        ctx.log(`${label}：仍未放行，回退标准签到`);
         data = await api('checkin', { token: HOST });
       }
-      if (data.code !== 0) throw new Error(`${data.message || '未知签到结果'}${data.reason ? `（${data.reason}）` : ''}`);
+      if (data.code !== 0 || rejected(data)) throw new Error(`${data.message || '未知签到结果'}${data.reason ? `（${data.reason}）` : ''}；本轮未被服务端记录`);
       ctx.log(`${label}：${data.message || '签到完成'}${data.points != null ? `（+${Number(data.points)} 分）` : ''}`);
       if (data.repeated) ctx.log(`${label}：今日已签到，本轮为重复确认`);
       if (data.streak != null) ctx.log(`${label}：连续签到 ${data.streak} 天`);
