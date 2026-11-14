@@ -45,6 +45,8 @@ export async function run(ctx) {
   let failures = 0, processed = 0;
   // 服务端拒绝形态：显式 turnstile 理由，或"Cloudflare verification failed / Nothing was recorded"消息（11-13 实测）。
   const rejected = d => d?.reason === 'turnstile' || /cloudflare verification|nothing was recorded/i.test(String(d?.message || ''));
+  // 接受形态：code 0，或重复签到消息（14 日实测：当日已签时服务端返回 code≠0 + "Today's observation logged"）。
+  const accepted = d => d?.code === 0 || /today.s observation logged|checkin repeats|checkin! got/i.test(String(d?.message || ''));
   for (let index = 0; index < cookies.length; index++) {
     if (!ctx.canStart(10)) break;
     const cookie = cookies[index];
@@ -92,7 +94,8 @@ export async function run(ctx) {
         ctx.log(`${label}：仍未放行，回退标准签到`);
         data = await api('checkin', { token: HOST });
       }
-      if (data.code !== 0 || rejected(data)) throw new Error(`${data.message || '未知签到结果'}${data.reason ? `（${data.reason}）` : ''}；本轮未被服务端记录`);
+      if (rejected(data)) throw new Error(`${data.message || '未知签到结果'}${data.reason ? `（${data.reason}）` : ''}；本轮未被服务端记录`);
+      if (!accepted(data)) throw new Error(`${data.message || '未知签到结果'}${data.reason ? `（${data.reason}）` : ''}`);
       ctx.log(`${label}：${data.message || '签到完成'}${data.points != null ? `（+${Number(data.points)} 分）` : ''}`);
       if (data.repeated) ctx.log(`${label}：今日已签到，本轮为重复确认`);
       if (data.streak != null) ctx.log(`${label}：连续签到 ${data.streak} 天`);

@@ -174,6 +174,16 @@ test('GLaDOS：标准签到也被拒 → 响亮失败，不误报成功',async()
   const result=await glados(ctx);assert.equal(result.failed,true);
   assert.match(result.content,/未被服务端记录/);assert.equal(ctx.calls,5);
 });
+test('GLaDOS：当日重复签到响应（code≠0 + observation logged）不算失败',async()=>{
+  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async url=>{
+    if(url.endsWith('/checkin/challenge'))return challenge({turnstile:null});
+    if(url.endsWith('/checkin'))return json({code:1,message:"Today's observation logged. Return tomorrow for more points."});
+    if(url.endsWith('/status'))return json({code:0,data:{leftDays:551}});
+    return json({points:35,history:[{change:2}]});
+  });
+  const result=await glados(ctx);assert.equal(result.failed,false);
+  assert.ok(ctx.logs.some(l=>l.message.includes('observation logged')));
+});
 test('GLaDOS：挑战接口故障 → 浏览器同款降级（直接签到）',async()=>{
   let checkins=0;
   const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async(url,init)=>{
