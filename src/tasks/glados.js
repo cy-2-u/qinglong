@@ -2,8 +2,8 @@ const HOST = 'glados.cloud';
 const SALT = 'glados-observe-v1';
 // 请求指纹逐字节镜像浏览器客户端（HAR 实测：Edge 154 / Windows，2026-11）。
 // 签到协议：GET checkin/challenge 拿 nonce → proof = SHA-256(nonce.salt) → POST {token,nonce,proof,tsState}。
-// Turnstile token 无法在 Worker 内求解；镜像真实浏览器在验证未完成时发出的 timeout 态（合法行为空间），
-// 服务端拒绝则回退标准签到，保证当天不为 0 分。
+// Turnstile token 无法在 Worker 内求解；镜像真实浏览器在验证未完成时发出的 timeout 态（合法行为空间）。
+// 被拒则按浏览器行为重试一次，再回退标准签到；全部被拒则响亮失败，不误报成功。
 const BROWSER = {
   'accept': 'application/json, text/plain, */*',
   'accept-language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7,en-GB;q=0.6',
