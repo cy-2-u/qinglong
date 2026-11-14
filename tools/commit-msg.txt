@@ -1,9 +1,0 @@
-fix(defer): temp identity from builtin name, not user-editable name
-
-isTemp used name.endsWith("（补跑）") - user-editable. A regular task
-renamed to end with that suffix would silently enter the temp path
-(60s self-delete, next_run_at=now+60). Conversely a renamed main task's
-catch-up row was never recognized as temp, rerunning hourly forever.
-Identity is now full equality with builtin name + suffix, and the
-catch-up row name anchors to the builtin name for the same reason.
-Three tests pin the semantics.

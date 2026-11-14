@@ -2,24 +2,17 @@ name = "qinglong"
 main = "src/index.js"
 compatibility_date = "2025-10-01"
 
-# 面板静态资源（public/ 目录整体作为 Workers Static Assets，先于 Worker 匹配）
 [assets]
 directory = "./public"
 binding = "ASSETS"
+run_worker_first = ["/api/*", "/health"]
 
-# cron 只当看门狗（每小时确保 DO 闹钟活着）；真调度在 TaskScheduler DO 的 alarm 里
 [triggers]
 crons = ["0 * * * *"]
 
-# 调度锚定用的时区偏移（小时，相对 UTC）
 [vars]
 TZ_OFFSET = "8"
 
-# 内置任务脚本在 src/tasks/ 以 ES 模块随构建打包（Workers 运行时禁止编译字符串），
-# 面板不存脚本文本，任务通过 script_key 引用内置库成员。
-
-# D1 库由 CI 自动"查找或创建"名为 qinglong 的库并回填此占位符；
-# 本地 dev（wrangler dev）直接用全零占位符即可
 [[d1_databases]]
 binding = "DB"
 database_name = "qinglong"

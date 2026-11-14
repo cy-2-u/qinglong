@@ -1,122 +1,40 @@
 [Console]::OutputEncoding=[System.Text.Encoding]::UTF8
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-
-$gh = Get-Command gh -ErrorAction SilentlyContinue
-if (-not $gh) { Write-Output 'NO_GH'; exit 1 }
-
-$login = gh api user --jq '.login'
-if ($LASTEXITCODE -ne 0) { Write-Output 'GH_AUTH_FAIL'; exit 1 }
-Write-Output "GH_USER: $login"
-$full = "$login/qinglong"
-
-# ---------- 1) ensure repo exists (create if missing; token lacks delete_repo, reuse when present) ----------
-$probe = gh repo view $full --json name 2>$null
-if (-not $probe) {
-  gh repo create qinglong --private 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { Write-Output 'CREATE_FAIL'; exit 1 }
-  Write-Output 'REPO_CREATED'
-} else {
-  Write-Output 'REPO_EXISTS_REUSE'
+if ($args.Count -lt 2) { throw 'Usage: pwsh -File tools/upload.ps1 owner/repo "reason" [-Publish]' }
+$repo, $message = $args[0], $args[1]
+if ($repo -notmatch '^[\w.-]+/[\w.-]+$' -or $message -match '[\r\n]' -or -not $message.Trim()) { throw 'Invalid repository or single-line message' }
+$publish = $args.Count -eq 3 -and $args[2] -eq '-Publish'
+if ($args.Count -gt 2 -and -not $publish) { throw 'Unknown argument' }
+$paths = @('.github/workflows/deploy.yml','.gitignore','.dev.vars.example','LICENSE','README.md','package.json','package-lock.json','wrangler.toml')
+foreach ($directory in @('src','public','tools')) {
+  $paths += Get-ChildItem -LiteralPath (Join-Path $root $directory) -File -Recurse | ForEach-Object { [IO.Path]::GetRelativePath($root,$_.FullName).Replace([char]92,'/') }
 }
-# repo description/topics belong to the repo, not the push script — set once via gh repo edit
-
-# ---------- 2) bootstrap empty repo: Contents API creates the first commit on main ----------
-$headSha = gh api "repos/$full/git/ref/heads/main" --jq '.object.sha' 2>$null
-if ($LASTEXITCODE -ne 0 -or -not $headSha) {
-  Write-Output 'BOOTSTRAP: empty repo, creating first commit via Contents API'
-  $initBody = @{ message = 'chore: init'; content = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('init')) } | ConvertTo-Json
-  $jsonInit = Join-Path $env:TEMP 'ql_init.json'
-  [System.IO.File]::WriteAllText($jsonInit, $initBody, (New-Object System.Text.UTF8Encoding($false)))
-  gh api -X PUT "repos/$full/contents/README.md" --input $jsonInit 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { Write-Output 'BOOTSTRAP_FAIL'; exit 1 }
-  $headSha = gh api "repos/$full/git/ref/heads/main" --jq '.object.sha' 2>$null
-  if ($LASTEXITCODE -ne 0 -or -not $headSha) { Write-Output 'HEAD_FAIL'; exit 1 }
-}
-Write-Output "HEAD: $headSha"
-
-$baseTree = gh api "repos/$full/git/commits/$headSha" --jq '.tree.sha' 2>$null
-if ($LASTEXITCODE -ne 0 -or -not $baseTree) { Write-Output 'BASETREE_FAIL'; exit 1 }
-
-# ---------- 3) collect files ----------
-$excludeDirs = @('node_modules', '.wrangler', '.git', '_restore')
-$files = Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
-  $rel = $_.FullName.Substring($root.Length + 1)
-  $parts = $rel.Split('\')
-  if ($parts | Where-Object { $excludeDirs -contains $_ }) { return $false }
-  # local-only: dev secrets + the commit-message scratch file (source of this push)
-  if ($rel -eq '.dev.vars' -or $rel -eq 'tools/commit-msg.txt') { return $false }
-  return $true
-}
-Write-Output ("FILES: " + $files.Count)
-
-$entries = @()
-$rawDeletes = @()   # raw JSON literals for deletions (sha:null) — see block below
-foreach ($f in $files) {
-  $rel = $f.FullName.Substring($root.Length + 1).Replace('\', '/')
-  $content = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
-  $entries += [PSCustomObject]@{ path = $rel; mode = '100644'; type = 'blob'; content = $content }
-}
-
-# paths listed in delete-list.txt are removed from the repo (sha:null deletes the entry);
-# skip paths already absent from the base tree (GitHub rejects deleting nonexistent entries).
-# NOTE: delete entries are emitted as raw JSON literals — PS 5.1 ConvertTo-Json drops
-# null-valued properties entirely, which silently turned every deletion into a no-op.
-$deleteListFile = Join-Path $PSScriptRoot 'delete-list.txt'
-if (Test-Path $deleteListFile) {
-  # NOTE: ${baseTree} braces are mandatory — in PS 5.1 "$baseTree?recursive" parses
-  # '?recursive' into the variable name (404 body ends up as the only "path").
-  $basePathSet = @{}
-  gh api "repos/$full/git/trees/${baseTree}?recursive=1" --jq '.tree[].path' 2>$null | ForEach-Object { $basePathSet[$_] = $true }
-  if ($basePathSet.Count -lt 5) { Write-Output 'BASETREE_LIST_FAIL'; exit 1 }
-  Get-Content $deleteListFile -Encoding UTF8 | ForEach-Object {
-    $p = $_.Trim()
-    if ($p -and -not $p.StartsWith('#')) {
-      if ($basePathSet.ContainsKey($p.Replace('\', '/'))) {
-        $script:rawDeletes += '{"path":"' + $p.Replace('\', '/') + '","mode":"100644","type":"blob","sha":null}'
-        Write-Output ("DELETE_REMOTE: " + $p)
-      } else {
-        Write-Output ("DELETE_SKIP (not in base tree): " + $p)
-      }
-    }
+$paths = @($paths | Sort-Object -Unique)
+foreach ($path in $paths) { if (-not (Test-Path -LiteralPath (Join-Path $root $path) -PathType Leaf)) { throw "Missing file: $path" } }
+$paths | Write-Output
+if (-not $publish) { Write-Output 'Preview only. -Publish replaces the remote tree with these files and triggers CI.'; exit 0 }
+function Api([string]$endpoint, $body) {
+  if ($null -eq $body) { $result = gh api $endpoint }
+  else {
+    $file = Join-Path $env:TEMP ("qinglong-" + [guid]::NewGuid() + '.json')
+    try {
+      $body | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $file -Encoding UTF8
+      $result = gh api $endpoint --input $file
+    } finally { Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue }
   }
+  if ($LASTEXITCODE -ne 0) { throw "GitHub API failed: $endpoint" }
+  return ($result | ConvertFrom-Json)
 }
-
-$treeObj = @{ base_tree = $baseTree; tree = $entries }
-$treeBody = $treeObj | ConvertTo-Json -Depth 4
-if ($rawDeletes.Count -gt 0) {
-  # splice raw delete entries into the serialized tree array:
-  # "tree": [ ...converted entries... ]  ->  append ,<raw1>,<raw2>...
-  $joined = $treeBody -replace '"tree":\s*\[', ('"tree": [' + ($rawDeletes -join ',') + ',')
-  if ($joined -eq $treeBody) { Write-Output 'TREE_SPLICE_FAIL'; exit 1 }
-  $treeBody = $joined
-}
-$jsonTree = Join-Path $env:TEMP 'ql_tree.json'
-[System.IO.File]::WriteAllText($jsonTree, $treeBody, (New-Object System.Text.UTF8Encoding($false)))
-
-# ---------- 4) tree -> commit -> update main ----------
-$treeSha = gh api "repos/$full/git/trees" --input $jsonTree --jq '.sha' 2>$null
-if ($LASTEXITCODE -ne 0 -or -not $treeSha) { Write-Output 'TREE_FAIL'; exit 1 }
-Write-Output "TREE: $treeSha"
-
-# commit message: first arg = custom file, default tools/commit-msg.txt (local-only scratch)
-$msgFile = if ($args.Count -gt 0) { $args[0] } else { Join-Path $PSScriptRoot 'commit-msg.txt' }
-$msg = [System.IO.File]::ReadAllText($msgFile, [System.Text.Encoding]::UTF8)
-# commit body via --input JSON: multiline -f args get mangled by PS 5.1 native arg passing
-$commitBody = @{ message = $msg; tree = $treeSha; parents = @($headSha) } | ConvertTo-Json
-$jsonCommit = Join-Path $env:TEMP 'ql_commit.json'
-[System.IO.File]::WriteAllText($jsonCommit, $commitBody, (New-Object System.Text.UTF8Encoding($false)))
-$commitSha = gh api "repos/$full/git/commits" --input $jsonCommit --jq '.sha' 2>$null
-if ($LASTEXITCODE -ne 0 -or -not $commitSha) { Write-Output 'COMMIT_FAIL'; exit 1 }
-Write-Output "COMMIT: $commitSha"
-
-$patchBody = @{ sha = $commitSha; force = $false } | ConvertTo-Json
-$jsonPatch = Join-Path $env:TEMP 'ql_ref.json'
-[System.IO.File]::WriteAllText($jsonPatch, $patchBody, (New-Object System.Text.UTF8Encoding($false)))
-gh api -X PATCH "repos/$full/git/refs/heads/main" --input $jsonPatch --jq '.object.sha' 2>$null
-if ($LASTEXITCODE -ne 0) { Write-Output 'REF_FAIL'; exit 1 }
-
-# ---------- 5) verify ----------
-$count = gh api "repos/$full/git/trees/main?recursive=1" --jq '.tree | length' 2>$null
-Write-Output "TREE_FILES: $count"
-Write-Output "DONE: https://github.com/$full"
+$head = (Api "repos/$repo/git/ref/heads/main" $null).object.sha
+$entries = foreach ($path in $paths) { @{path=$path; mode='100644'; type='blob'; content=Get-Content -LiteralPath (Join-Path $root $path) -Raw -Encoding UTF8} }
+$tree = Api "repos/$repo/git/trees" @{tree=@($entries)}
+$current = Api "repos/$repo/git/commits/$head" $null
+if ($tree.sha -eq $current.tree.sha) { Write-Output 'No changes'; exit 0 }
+$commit = Api "repos/$repo/git/commits" @{message=$message; tree=$tree.sha; parents=@($head)}
+$file = Join-Path $env:TEMP ("qinglong-" + [guid]::NewGuid() + '.json')
+try {
+  @{sha=$commit.sha; force=$false} | ConvertTo-Json | Set-Content -LiteralPath $file -Encoding UTF8
+  gh api -X PATCH "repos/$repo/git/refs/heads/main" --input $file --jq '.object.sha'
+  if ($LASTEXITCODE -ne 0) { throw 'Branch update failed; remote may have changed' }
+} finally { Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue }

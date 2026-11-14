@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test tools/test.mjs",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "test": "node tools/test-nextrun.mjs && node tools/test-dnshe.mjs && node tools/test-glados.mjs && node tools/test-notify.mjs && node tools/test-runner.mjs"
+    "simulate": "node tools/serve.mjs",
+    "check": "node tools/check.mjs",
+    "deploy": "wrangler deploy"
   },
-  "devDependencies": {
-    "wrangler": "^4.0.0"
-  }
+  "devDependencies": { "wrangler": "^4.158.0" }
 }

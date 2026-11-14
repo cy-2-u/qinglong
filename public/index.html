@@ -1,19 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>青龙面板</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-  <link rel="stylesheet" href="/assets/style/tokens.css?v=20261109e">
-  <link rel="stylesheet" href="/assets/style/base.css?v=20261109e">
-  <link rel="stylesheet" href="/assets/style/components.css?v=20261109e">
-  <link rel="stylesheet" href="/assets/style/views.css?v=20261109e">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>青龙面板</title>
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/style.css?v=3">
+<script type="module" src="/app.js?v=3"></script>
 </head>
 <body>
-  <div id="app"></div>
-  <script src="/assets/api.js?v=20261109e"></script>
-  <script src="/assets/components.js?v=20261109e"></script>
-  <script src="/assets/app.js?v=20261109e"></script>
-</body>
-</html>
+<header><a class="brand" href="/"><img src="/favicon.svg" width="22" height="22" alt=""> <span>青龙面板</span></a><nav hidden id="nav"><button data-action="theme" aria-label="切换主题">◐</button><button data-action="settings" aria-label="推送设置">♧</button><button data-action="logout" aria-label="退出登录">↪</button></nav></header>
+<main id="main"><p class="muted">正在连接…</p></main>
+<dialog id="sheet"></dialog><div id="toast" role="status" aria-live="polite"></div>
+</body></html>

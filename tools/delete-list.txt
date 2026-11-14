@@ -1,2 +1,0 @@
-# upload.ps1 pushes: paths below are deleted from the GitHub repo (one per line).
-# 工作清单：已清空。下次要删远端文件时把路径写在这里。
