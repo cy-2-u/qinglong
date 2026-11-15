@@ -7,7 +7,7 @@ const worker=(await import('../src/index.js')).default;
 // 本地演练只返回假接口，永不发送真实签到、续期或通知。
 globalThis.fetch=async(url,init)=>{
   const u=new URL(url);
-  const body=u.pathname.endsWith('/checkin/challenge')?{code:0,nonce:'sim-nonce',ttl:300000,turnstile:null}:u.pathname.endsWith('/checkin')?{code:0,points:2,message:'模拟签到成功',streak:2,breakdown:[{label:'base',value:2}]}:u.pathname.endsWith('/status')?{code:0,data:{leftDays:100}}:u.pathname.endsWith('/points')?{points:30,history:[{change:1}]}:u.searchParams.get('action')==='list'?{subdomains:[],pagination:{total:0,has_more:false}}:{code:0,success:true};
+  const body=u.searchParams.get('action')==='list'?{subdomains:[],pagination:{total:0,has_more:false}}:{code:0,success:true};
   return Response.json(body);
 };
 let firing=false;

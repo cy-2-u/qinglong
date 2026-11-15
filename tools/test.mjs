@@ -5,11 +5,10 @@ import { Store } from '../src/store.js';
 import { initialNext, nextRun, normalize, offset, now } from '../src/schedule.js';
 import { Engine, BUILTINS } from '../src/engine.js';
 import { runtime, notify } from '../src/runtime.js';
-import { parseCookies, run as glados } from '../src/tasks/glados.js';
 import { run as dnshe, expiry, truth } from '../src/tasks/dnshe.js';
 import { valid, issue, cookie, passwordMatches } from '../src/auth.js';
 
-const task = (extra={}) => ({name:'任务',script_key:'glados-checkin',params:{cookie:'gld:sess=a; gld:sess.sig=b'},enabled:1,interval_unit:'d',interval_amount:1,run_hour:9,run_minute:3,run_day:null,...extra});
+const task = (extra={}) => ({name:'任务',script_key:'dnshe-renew',params:{api_key:'k',api_secret:'s'},enabled:1,interval_unit:'d',interval_amount:1,run_hour:9,run_minute:3,run_day:null,...extra});
 const bj = (day,hour=9,minute=3) => Date.UTC(2026,10,day,hour-8,minute)/1000;
 function context(params, fetcher, budget=40) {
   const logs=[];let calls=0;
@@ -55,7 +54,7 @@ test('迁移：旧补跑结构只暂停不删除，新版同名任务不再误�
   const db=database(),s=new Store(db);await s.init({});
   try {
     await s.query("DELETE FROM settings WHERE key='jobs_v1'").run();
-    const id=await s.create({...task({name:'GLaDOS 签到（补跑）',interval_unit:'h',interval_amount:1,run_hour:null,run_minute:null,run_day:null}),next_run_at:now()});
+    const id=await s.create({...task({name:'GLaDOS 签到（补跑）',script_key:'glados-checkin',interval_unit:'h',interval_amount:1,run_hour:null,run_minute:null,run_day:null}),next_run_at:now()});
     await s.init({});assert.equal((await s.task(id)).enabled,0);assert.ok((await s.logs(id)).some(l=>/暂停/.test(l.text)));
     await s.toggle(id,1);await s.init({});assert.equal((await s.task(id)).enabled,1);
   } finally {db.close();}
@@ -89,7 +88,7 @@ test('执行链：名称碰撞不自删，同脚本不同任务补跑独立，�
   const a=await s.create({...task({name:'GLaDOS 签到（补跑）'}),params:{step:0},next_run_at:now()+86400});
   const b=await s.create({...task({name:'另一个账号'}),params:{step:10},next_run_at:now()+86400});
   await s.enqueue(await s.task(a),'manual',now());await s.enqueue(await s.task(b),'manual',now());
-  const engine=new Engine(s,p.env,{builtins:{'glados-checkin':{run:async ctx=>{ctx.log('业务完成');return ctx.params.step===0?{defer:{step:1},failed:true}:{title:'done',content:'ok'};}}}});
+  const engine=new Engine(s,p.env,{builtins:{'dnshe-renew':{run:async ctx=>{ctx.log('业务完成');return ctx.params.step===0?{defer:{step:1},failed:true}:{title:'done',content:'ok'};}}}});
   await engine.tick();assert.equal(JSON.parse((await s.job(a)).params).step,1);assert.equal((await s.task(a)).last_status,'failed');
   await engine.tick();assert.equal(await s.job(b),null);
   assert.ok(await s.task(a));await s.query('UPDATE jobs SET due=? WHERE task_id=?',now(),a).run();
@@ -108,7 +107,7 @@ test('崩溃恢复：未知结果留痕、不自动重发有副作用请求',asy
 });
 test('定时队列：每 tick 只执行一个，到期锚点推进、不反复请求',async()=>{
   const p=await platform(),s=p.object.store;const id=await s.create({...task(),next_run_at:now()-100});
-  let count=0;const engine=new Engine(s,p.env,{builtins:{'glados-checkin':{run:async()=>{count++;return {};}}}});
+  let count=0;const engine=new Engine(s,p.env,{builtins:{'dnshe-renew':{run:async()=>{count++;return {};}}}});
   await engine.tick();await engine.tick();assert.equal(count,1);assert.ok((await s.task(id)).next_run_at>now());p.close();
 });
 test('资源：重定向拒绝、预算截断、结束后请求被取消、通知状态检查',async()=>{
@@ -118,97 +117,6 @@ test('资源：重定向拒绝、预算截断、结束后请求被取消、通�
   await assert.rejects(()=>rt.fetch('https://local.test'),/预算/);rt.close();
   await assert.rejects(()=>rt.fetch('https://local.test'));assert.equal(count,3);
   await assert.rejects(()=>notify('x','test','body',async()=>json({},500)),/500/);
-});
-const sha256hex = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2,'0')).join('');
-const challenge = body => json({code:0,nonce:'n0nce123',ttl:300000,...(body??{turnstile:'sitekey'})});
-test('GLaDOS：JSON Cookie、镜像浏览器协议（挑战+SHA-256 证明+指纹头）、自动兑换',async()=>{
-  const cookies=parseCookies('[\n{"name":"gld:sess","value":"a"},\n{"name":"gld:sess.sig","value":"b"}\n]');assert.equal(cookies.length,1);
-  const posts=[];let points=520;
-  const ctx=context({cookie:cookies[0]},async(url,init)=>{
-    assert.equal(init.headers['user-agent'].includes('Edg/154'),true);
-    if(url.endsWith('/checkin/challenge'))return challenge();
-    if(url.endsWith('/checkin')){
-      const body=JSON.parse(init.body);posts.push(body);
-      if(posts.length===1){
-        assert.equal(body.token,'glados.cloud');assert.equal(body.nonce,'n0nce123');assert.equal(body.tsState,'timeout');
-        assert.equal(body.proof,await sha256hex('n0nce123.glados-observe-v1'));
-        return json({code:0,points:2,message:'Checkin! Got 2 Points',streak:4,breakdown:[{label:'base',value:1}]});
-      }
-      return json({code:0});
-    }
-    if(url.endsWith('/status'))return json({code:0,data:{leftDays:30}});
-    if(url.endsWith('/points'))return json({points,history:[{change:2}]});
-    points=20;return json({code:0});
-  });
-  const result=await glados(ctx);assert.equal(result.failed,false);assert.match(result.content,/积分 20/);
-  assert.ok(ctx.logs.some(l=>l.message.includes('Got 2 Points')));assert.ok(ctx.logs.some(l=>l.message.includes('积分构成')));assert.ok(ctx.logs.some(l=>l.message.includes('连续签到 4 天')));
-  assert.equal(posts.length,1);
-});
-test('GLaDOS：人机验证拒绝 → 重试完整协议后通过',async()=>{
-  let checkins=0;
-  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async(url,init)=>{
-    if(url.endsWith('/checkin/challenge'))return challenge();
-    if(url.endsWith('/checkin')){checkins++;return checkins===1?json({code:7,reason:'turnstile',message:'verify human'}):json({code:0,points:1,message:'Checkin! Got 1 Points'});}
-    if(url.endsWith('/status'))return json({code:0,data:{leftDays:30}});
-    return json({points:10,history:[{change:1}]});
-  });
-  const result=await glados(ctx);assert.equal(result.failed,false);assert.equal(checkins,2);
-  assert.ok(ctx.logs.some(l=>l.message.includes('重试一次')));
-});
-test('GLaDOS：二次拒绝 → 回退标准签到成功',async()=>{
-  let checkins=0;
-  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async url=>{
-    if(url.endsWith('/checkin/challenge'))return challenge();
-    if(url.endsWith('/checkin')){checkins++;return checkins<3?json({code:7,reason:'turnstile',message:'verify human'}):json({code:0,points:1,message:'Checkin! Got 1 Points'});}
-    if(url.endsWith('/status'))return json({code:0,data:{leftDays:30}});
-    return json({points:10,history:[{change:1}]});
-  });
-  const result=await glados(ctx);assert.equal(result.failed,false);assert.equal(checkins,3);
-  assert.ok(ctx.logs.some(l=>l.message.includes('回退标准签到')));
-});
-test('GLaDOS：标准签到也被拒 → 响亮失败，不误报成功',async()=>{
-  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async url=>{
-    if(url.endsWith('/checkin/challenge'))return challenge();
-    return json({code:0,message:'Cloudflare verification failed. Nothing was recorded — please retry.'});
-  });
-  const result=await glados(ctx);assert.equal(result.failed,true);
-  assert.match(result.content,/未被服务端记录/);assert.equal(ctx.calls,5);
-});
-test('GLaDOS：当日重复签到响应（code≠0 + observation logged）不算失败',async()=>{
-  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async url=>{
-    if(url.endsWith('/checkin/challenge'))return challenge({turnstile:null});
-    if(url.endsWith('/checkin'))return json({code:1,message:"Today's observation logged. Return tomorrow for more points."});
-    if(url.endsWith('/status'))return json({code:0,data:{leftDays:551}});
-    return json({points:35,history:[{change:2}]});
-  });
-  const result=await glados(ctx);assert.equal(result.failed,false);
-  assert.ok(ctx.logs.some(l=>l.message.includes('observation logged')));
-});
-test('GLaDOS：挑战接口故障 → 浏览器同款降级（直接签到）',async()=>{
-  let checkins=0;
-  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b'},async(url,init)=>{
-    if(url.endsWith('/checkin/challenge'))return json({},503);
-    if(url.endsWith('/checkin')){checkins++;assert.equal(JSON.parse(init.body).nonce,undefined);return json({code:0,points:1,message:'ok'});}
-    if(url.endsWith('/status'))return json({code:0,data:{leftDays:30}});
-    return json({points:10,history:[{change:1}]});
-  });
-  const result=await glados(ctx);assert.equal(result.failed,false);assert.equal(checkins,1);
-});
-test('GLaDOS：风控/设备不匹配立即停止并标失败，不跨域重试',async()=>{
-  const ctx=context({cookie:'gld:sess=x; gld:sess.sig=y'},async url=>{
-    if(url.endsWith('/checkin/challenge'))return challenge({turnstile:null});
-    return json({code:4,reason:'device-mismatch',message:'Device mismatch'});
-  });
-  const result=await glados(ctx);assert.equal(result.failed,true);assert.equal(ctx.calls,2);
-});
-test('GLaDOS：预算后剩余集只含未处理账号',async()=>{
-  const ctx=context({cookie:'gld:sess=a; gld:sess.sig=b\ngld:sess=c; gld:sess.sig=d'},async url=>{
-    if(url.endsWith('/checkin/challenge'))return challenge({turnstile:null});
-    if(url.endsWith('/checkin'))return json({code:0,points:1,message:'ok'});
-    if(url.endsWith('/status'))return json({code:0,data:{leftDays:20}});
-    return json({points:10});
-  },10);
-  const result=await glados(ctx);assert.equal(result.defer.cookie,'gld:sess=c; gld:sess.sig=d');assert.equal(ctx.calls,4);
 });
 test('DNSHE：窗口精确、字符串 false、成功/未到窗口、保留错误',async()=>{
   assert.equal(truth('0'),false);assert.equal(truth('false'),false);assert.equal(expiry('2026-11-13 09:00:00'),Date.UTC(2026,10,13,1)/1000);
@@ -220,18 +128,11 @@ test('DNSHE：窗口精确、字符串 false、成功/未到窗口、保留错�
 test('DNSHE：分页不完整拒绝续期，错误时无隐式重试',async()=>{
   const ctx=context({api_key:'k',api_secret:'s'},async()=>json({pagination:{total:3,has_more:false},subdomains:[{id:1}]}));await assert.rejects(()=>dnshe(ctx),/不完整/);assert.equal(ctx.calls,1);
 });
-test('GLaDOS：坏 Cookie 不阻断后续账号，null 状态码不算成功',async()=>{
-  const ctx=context({cookie:'invalid\ngld:sess=a; gld:sess.sig=b'},async url=>{
-    if(url.endsWith('/checkin/challenge'))return challenge({turnstile:null});
-    return json({code:null,message:'unknown'});
-  });
-  const result=await glados(ctx);assert.equal(result.failed,true);assert.equal(ctx.calls,2);assert.match(result.content,/账号 1.*缺少会话/);assert.match(result.content,/账号 2.*unknown/);
-});
 test('持久化顺序：通知发送前结果已提交，通知失败不回滚业务',async()=>{
   const p=await platform(),s=p.object.store;
   try {
     const id=await s.create({...task(),next_run_at:now()+86400});await s.setKey('simulation');await s.enqueue(await s.task(id),'manual',now());
-    await new Engine(s,p.env,{builtins:{'glados-checkin':{run:async()=>({title:'done'})}},fetcher:async()=>{
+    await new Engine(s,p.env,{builtins:{'dnshe-renew':{run:async()=>({title:'done'})}},fetcher:async()=>{
       assert.equal((await s.task(id)).last_status,'ok');assert.equal(await s.job(id),null);return json({},500);
     }}).tick();
     assert.equal((await s.task(id)).last_status,'ok');assert.ok((await s.logs(id)).some(l=>/通知失败/.test(l.text)));

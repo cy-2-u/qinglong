@@ -26,7 +26,7 @@ export class Store {
     if (!seeded) {
       const row = await this.query('SELECT COUNT(*) AS n FROM tasks').first();
       const statements = [];
-      if (!row.n) for (const [name, key, unit] of [['GLaDOS 签到','glados-checkin','d'],['DNSHE 域名续期','dnshe-renew','m']]) {
+      if (!row.n) for (const [name, key, unit] of [['DNSHE 域名续期','dnshe-renew','m']]) {
         const t = { name, script_key: key, params: '{}', enabled: 0, interval_amount: 1, interval_unit: unit, run_hour: 9, run_minute: 0, run_day: unit === 'm' ? 1 : null };
         t.next_run_at = initialNext(t, now(), offset(env));
         statements.push(this.insert(t));

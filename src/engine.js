@@ -1,10 +1,8 @@
-import { run as glados } from './tasks/glados.js';
 import { run as dnshe } from './tasks/dnshe.js';
 import { runtime, notify } from './runtime.js';
 import { now, nextRun, offset } from './schedule.js';
 
 export const BUILTINS = {
-  'glados-checkin': { name: 'GLaDOS 签到', params: ['cookie'], run: glados },
   'dnshe-renew': { name: 'DNSHE 域名续期', params: ['api_key','api_secret'], run: dnshe },
 };
 export class Engine {
