@@ -4,6 +4,15 @@ import { notify } from './runtime.js';
 export { TaskScheduler };
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 const stub = env => env.SCHEDULER.get(env.SCHEDULER.idFromName('default'));
+// 登录限速：公网面板配短密码的现实威胁是暴破；单 IP 连续 5 次错误锁 10 分钟（模块级计数，零额外请求）。
+const loginFails = new Map();
+const LOCK_ATTEMPTS = 5, LOCK_MS = 600000;
+function loginBlocked(ip) {
+  const fail = loginFails.get(ip);
+  if (!fail) return false;
+  if (Date.now() > fail.until) { loginFails.delete(ip); return false; }
+  return fail.count >= LOCK_ATTEMPTS;
+}
 export default {
   async fetch(request, env) {
     const url = new URL(request.url), method = request.method;
@@ -25,7 +34,16 @@ export default {
       }
       if (url.pathname === '/api/login' && method === 'POST') {
         if (!env.PANEL_PASSWORD) return json({ error: '尚未设置面板密码' }, 503);
-        if (!(await passwordMatches(body.password, env.PANEL_PASSWORD))) return json({ error: '密码错误' }, 401);
+        const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+        if (loginBlocked(ip)) return json({ error: '尝试过于频繁，请稍后再试' }, 429);
+        if (!(await passwordMatches(body.password, env.PANEL_PASSWORD))) {
+          if (loginFails.size > 500) loginFails.clear();
+          const fail = loginFails.get(ip) || { count: 0, until: 0 };
+          fail.count += 1; fail.until = Date.now() + LOCK_MS;
+          loginFails.set(ip, fail);
+          return json({ error: '密码错误' }, 401);
+        }
+        loginFails.delete(ip);
         return json({ ok: true }, 200, { 'set-cookie': cookie(await issue(env.PANEL_PASSWORD), url.protocol === 'https:') });
       }
       if (!(await valid(request, env.PANEL_PASSWORD))) return json({ error: '请登录' }, 401);

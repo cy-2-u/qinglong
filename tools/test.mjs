@@ -179,3 +179,23 @@ test('DNSHE：多轮补跑使用快照，不重复拉全量，失败不丢其他
   const first=await dnshe(ctx);assert.equal(first.defer._remaining.length,4);
   const ids=[];const second=context(first.defer,async(url,init)=>{assert.ok(!url.includes('action=list'));ids.push(JSON.parse(init.body).subdomain_id);return json({success:true});});await dnshe(second);assert.deepEqual(ids,[6,7,8,9]);
 });
+test('调度语义：PUT 不改频率保留锚点，改频率按规则重算',async()=>{
+  const p=await platform();const s=p.object.store;
+  const id=(await p.object.request('POST','/api/tasks',task())).body.id;
+  const before=(await s.task(id)).next_run_at;
+  await p.object.request('PUT',`/api/tasks/${id}`,task({name:'仅改名'}));
+  assert.equal((await s.task(id)).name,'仅改名');
+  assert.equal((await s.task(id)).next_run_at,before);
+  await p.object.request('PUT',`/api/tasks/${id}`,task({run_hour:10}));
+  assert.equal((await s.task(id)).next_run_at-before,3600);
+  p.close();
+});
+test('登录限速：单 IP 连续 5 次错误后 429，正确密码同样被拒',async()=>{
+  const p=await platform();const worker=(await import('../src/index.js')).default;
+  const attempt=(password,ip='203.0.113.7')=>worker.fetch(new Request('https://local.test/api/login',{method:'POST',headers:{'content-type':'application/json','cf-connecting-ip':ip},body:JSON.stringify({password})}),p.env);
+  for(let i=0;i<5;i++)assert.equal((await attempt('bad')).status,401);
+  assert.equal((await attempt('bad')).status,429);
+  assert.equal((await attempt('local-test-password')).status,429);
+  assert.equal((await attempt('local-test-password','198.51.100.9')).status,200);
+  p.close();
+});

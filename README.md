@@ -22,7 +22,7 @@ Static Assets 提供页面；一个 SQLite Durable Object 串行调度与修改�
 
 手动部署：`npm ci`，在 wrangler.toml 填入 D1 database_id，执行 `npx wrangler secret put PANEL_PASSWORD`、`npm run deploy`。首次部署后访问 `/health` 安排闹钟；此接口不返回任务凭据。
 
-凭据只填在面板中，保存在 D1；不要写入代码。使用足够长的面板密码。静态资源公开，所有业务 API 都要求登录。登录有效期 30 天，修改密码使旧 Cookie 失效；退出清除当前浏览器 Cookie。
+凭据只填在面板中，保存在 D1；不要写入代码。使用足够长的面板密码。静态资源公开，所有业务 API 都要求登录；同一 IP 连续 5 次密码错误将被锁定 10 分钟。登录有效期 30 天，修改密码使旧 Cookie 失效；退出清除当前浏览器 Cookie。
 
 ## 本地开发与验证
 
