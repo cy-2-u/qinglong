@@ -36,6 +36,8 @@ npm run simulate
 
 模拟面板地址 http://127.0.0.1:8791，密码 `local-test-password`，全部业务接口返回假数据，不会真实签到、续期或推送。模拟器使用 Node 原生 SQLite，执行实际应用 SQL 和调度代码，不能模拟 Cloudflare CPU 配额、网络行为或所有故障重试。
 
+`public/` 静态资产按 `immutable` 长缓存（`_headers`），HTML 引用带 `?v=` 版本号；修改这些文件时必须同时递增版本号，否则客户端会继续使用缓存副本。
+
 `npm run dev` 启动官方 workerd 本地运行时；先将 `.dev.vars.example` 复制为 `.dev.vars` 并修改密码。官方开发模式会使用真实外部接口，除非另行配置隔离。调试产物和依赖目录都已忽略。
 
 Windows 无 Git 环境可用 `pwsh -File tools/upload.ps1 owner/repo "修改原因"` 预览上传清单，追加 `-Publish` 才发布。发布会让 main 的文件树与清单一致，删除清单外远端文件并触发部署；不上传 `.dev.vars`、依赖和缓存。

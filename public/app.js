@@ -2,9 +2,8 @@ const $ = s => document.querySelector(s);
 const main = $('#main'), sheet = $('#sheet');
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 let state, timer, generation = 0, refreshing, editing, toastTimer;
-const paths = { run:'M9 5l11 7-11 7z', logs:'M5 3h10l4 4v14H5z M9 11h6 M9 15h6', edit:'M4 16L16 4l4 4L8 20H4z', del:'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14', settings:'M18 9a6 6 0 0 0-12 0c0 5-2 7-2 7h16s-2-2-2-7 M10 20h4', logout:'M9 4H4v16h5 M12 12h9 M17 8l4 4-4 4', theme:'M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10' };
+const paths = { run:'M9 5l11 7-11 7z', logs:'M5 3h10l4 4v14H5z M9 11h6 M9 15h6', edit:'M4 16L16 4l4 4L8 20H4z', del:'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14' };
 const icon = key => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[key]}"></path></svg>`;
-for (const key of ['settings','logout','theme']) $(`[data-action=${key}]`).innerHTML = icon(key);
 
 // 自绘浮层提示：文本取 data-tip 或 aria-label，置于元素上方，贴边翻转。
 const tip = document.createElement('div');
