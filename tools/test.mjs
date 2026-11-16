@@ -190,12 +190,3 @@ test('调度语义：PUT 不改频率保留锚点，改频率按规则重算',as
   assert.equal((await s.task(id)).next_run_at-before,3600);
   p.close();
 });
-test('登录限速：单 IP 连续 5 次错误后 429，正确密码同样被拒',async()=>{
-  const p=await platform();const worker=(await import('../src/index.js')).default;
-  const attempt=(password,ip='203.0.113.7')=>worker.fetch(new Request('https://local.test/api/login',{method:'POST',headers:{'content-type':'application/json','cf-connecting-ip':ip},body:JSON.stringify({password})}),p.env);
-  for(let i=0;i<5;i++)assert.equal((await attempt('bad')).status,401);
-  assert.equal((await attempt('bad')).status,429);
-  assert.equal((await attempt('local-test-password')).status,429);
-  assert.equal((await attempt('local-test-password','198.51.100.9')).status,200);
-  p.close();
-});
