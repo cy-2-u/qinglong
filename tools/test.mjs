@@ -23,7 +23,7 @@ test('调度：零时区、分钟、跨日月、长期停机常数步进',()=>{
   assert.equal(nextRun(task({next_run_at:bj(1),interval_amount:3}),bj(13,10),28800),bj(16));
   assert.equal(nextRun(task({next_run_at:1,interval_unit:'h',interval_amount:1}),2e9,28800),2000000041);
   const monthly=task({interval_unit:'m',run_day:28,interval_amount:2,next_run_at:Date.UTC(2020,0,28,1,3)/1000});
-  assert.ok(nextRun(monthly,bj(13),28800)>bj(13));
+  assert.equal(nextRun(monthly,bj(13),28800),bj(28));
 });
 test('字段校验：拒绝 NaN/无穷/数组/原型键，保留隐藏参数',()=>{
   assert.throws(()=>normalize(task({interval_amount:Infinity}),BUILTINS));
@@ -170,6 +170,8 @@ test('闹钟：空面板不唤醒，健康检查不会推迟已安排时间',asy
     await p.object.store.create({...task(),next_run_at:now()+600});
     await p.object.ensureAlarm();const first=p.alarm;
     await p.object.ensureAlarm();assert.equal(p.alarm,first);
+    await p.ctx.storage.setAlarm(Date.now()-10000);
+    await p.object.ensureAlarm();assert.ok(p.alarm!==null&&p.alarm>Date.now());
   } finally {p.close();}
 });
 
@@ -178,6 +180,17 @@ test('DNSHE：多轮补跑使用快照，不重复拉全量，失败不丢其他
   const ctx=context({api_key:'k',api_secret:'s',min_interval:0},async(url,init)=>url.includes('action=list')?json({pagination:{total:9,has_more:false},subdomains:domains}):json({success:true,new_expires_at:'2027-01-01'}),6);
   const first=await dnshe(ctx);assert.equal(first.defer._remaining.length,4);
   const ids=[];const second=context(first.defer,async(url,init)=>{assert.ok(!url.includes('action=list'));ids.push(JSON.parse(init.body).subdomain_id);return json({success:true});});await dnshe(second);assert.deepEqual(ids,[6,7,8,9]);
+});
+test('日志裁剪：finish 后每任务最多保留 200 行且最新的在前',async()=>{
+  const p=await platform(),s=p.object.store;
+  const id=await s.create({...task(),next_run_at:now()+86400});
+  await s.enqueue(await s.task(id),'manual',now());
+  await s.finish(id,'ok',Array.from({length:250},(_,i)=>({ts:now(),level:'info',text:'line'+i})),null);
+  const logs=await s.logs(id);
+  assert.equal(logs.length,200);
+  assert.equal(logs[0].text,'line249');
+  assert.equal(logs.at(-1).text,'line50');
+  p.close();
 });
 test('调度语义：PUT 不改频率保留锚点，改频率按规则重算',async()=>{
   const p=await platform();const s=p.object.store;
