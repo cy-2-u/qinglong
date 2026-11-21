@@ -1,4 +1,16 @@
 const BASE = 'https://ps.air-outer.com';
+// 浏览器镜像（Chrome/Edge 同源 XHR 形状）：POST 带 Origin，GET 不带；referer 按发起页。
+const PROFILE = {
+  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0',
+  'accept': 'application/json, text/plain, */*',
+  'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  'sec-ch-ua': '"Chromium";v="154", "Microsoft Edge";v="154", "Not(A:Brand";v="24"',
+  'sec-ch-ua-mobile': '?0',
+  'sec-ch-ua-platform': '"Windows"',
+  'sec-fetch-dest': 'empty',
+  'sec-fetch-mode': 'cors',
+  'sec-fetch-site': 'same-origin',
+};
 export function parseAccounts(raw) {
   const accounts = [];
   for (const line of String(raw ?? '').split('\n')) {
@@ -28,7 +40,7 @@ export async function run(ctx) {
     try {
       const response = await ctx.fetch(`${BASE}/api/user/login`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { ...PROFILE, origin: BASE, referer: `${BASE}/login`, 'content-type': 'application/json' },
         body: JSON.stringify({ username: account.email, password: account.password }),
       });
       const text = await response.text();
@@ -36,12 +48,13 @@ export async function run(ctx) {
       try { data = JSON.parse(text); } catch { throw new Error(`HTTP ${response.status}：非 JSON 响应`); }
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('响应格式异常');
       if (data.success === false || response.status >= 400) throw new Error(data.message || `HTTP ${response.status}`);
-      // 站点签到即每日登录；登录成功后带 New-Api-User 头查余额供对账。
+      // 站点签到即每日登录；登录成功后凭 session cookie + New-Api-User 头查余额供对账。
+      const jar = response.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');
       let extra = '';
       const id = data.data?.id;
-      if (id != null && ctx.canStart(1)) {
+      if (id != null && jar && ctx.canStart(1)) {
         try {
-          const self = await ctx.fetch(`${BASE}/api/user/self`, { headers: { 'New-Api-User': String(id) } });
+          const self = await ctx.fetch(`${BASE}/api/user/self`, { headers: { ...PROFILE, referer: `${BASE}/console/log`, cookie: jar, 'New-Api-User': String(id) } });
           const info = await self.json();
           extra = info?.data && info.success !== false ? `，quota ${info.data.quota}` : '，余额查询未返回';
         } catch { extra = '，余额查询失败（不影响签到）'; }

@@ -198,32 +198,44 @@ test('AgentRouter：账号解析（密码含逗号/空行/无效行）',()=>{
   assert.throws(()=>parseAccounts('a@qq.com'),/格式无效/);
   assert.throws(()=>parseAccounts('\n'),/无有效账号/);
 });
-test('AgentRouter：登录签到、密码错隔离、余额查询失败不影响成功',async()=>{
+test('AgentRouter：登录签到、密码错隔离、镜像头与 session 传递',async()=>{
   let calls=[];
   const ctx=context({accounts:'a@qq.com,p1\nb@qq.com,bad\nc@qq.com,p3'},async(url,init)=>{
     calls.push(url);
+    // 浏览器镜像：全部请求带 UA/sec-fetch 形状，POST 带 Origin，GET 不带。
+    assert.match(init.headers['user-agent'],/Chrome\/154/);
+    assert.equal(init.headers['sec-fetch-site'],'same-origin');
     if (url.includes('/api/user/login')) {
+      assert.equal(init.headers.origin,'https://ps.air-outer.com');
+      assert.match(init.headers.referer,/\/login$/);
       const body=JSON.parse(init.body);
       if (body.password==='bad') return json({success:false,message:'密码错误'});
-      return json({success:true,data:{id:body.username==='a@qq.com'?7:null,quota:0}});
+      return new Response(JSON.stringify({success:true,data:{id:body.username==='a@qq.com'?7:8,quota:0}}),{status:200,headers:{'content-type':'application/json','set-cookie':'session=s'+body.username.charCodeAt(0)+'; Path=/; HttpOnly'}});
     }
-    if (url.includes('/api/user/self')) return json({success:false});
+    if (url.includes('/api/user/self')) {
+      // 双因素：session cookie 缺失或 New-Api-User 缺失都必须在这里炸出来。
+      assert.ok(init.headers.cookie&&/^session=s\d+/.test(init.headers.cookie),'self 请求缺 session cookie');
+      assert.ok(init.headers['New-Api-User'],'self 请求缺 New-Api-User 头');
+      assert.equal(init.headers.referer,'https://ps.air-outer.com/console/log');
+      assert.equal(init.headers.origin,undefined);
+      return json({success:true,data:{id:Number(init.headers['New-Api-User']),quota:500000}});
+    }
     return json({});
   });
   const result=await agentrouter(ctx);
   assert.equal(result.failed,true);
   assert.match(result.content,/成功 2，失败 1/);
-  assert.match(result.content,/a@qq\.com：登录签到成功，quota 500000|quota \d+/.test(result.content)?result.content:/.*/);
+  assert.ok(result.content.includes('a@qq.com：登录签到成功，quota 500000'));
+  assert.ok(result.content.includes('c@qq.com：登录签到成功，quota 500000'));
   assert.ok(result.content.includes('b@qq.com：密码错误'));
-  assert.ok(result.content.includes('c@qq.com：登录签到成功'));
-  assert.ok(!result.content.includes('c@qq.com：登录签到成功，'));
   assert.equal(calls.filter(u=>u.includes('login')).length,3);
+  assert.equal(calls.filter(u=>u.includes('self')).length,2);
 });
 test('AgentRouter：预算截断走补跑快照，补跑不重跑已成功账号',async()=>{
   const accounts=Array.from({length:4},(_,i)=>`u${i+1}@qq.com,p${i+1}`).join('\n');
   const ctx=context({accounts},async(url,init)=>{
     assert.ok(JSON.parse(init.body).password);
-    return json({success:true,data:{id:1,quota:0}});
+    return new Response(JSON.stringify({success:true,data:{id:1,quota:0}}),{status:200,headers:{'content-type':'application/json','set-cookie':'session=s1; Path=/'}});
   },5);
   const first=await agentrouter(ctx);
   assert.equal(first.defer._remaining.length,2);
