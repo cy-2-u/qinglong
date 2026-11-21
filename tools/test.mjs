@@ -69,8 +69,12 @@ test('API：路由、登录、退出、SameSite 防线、HTTP 状态',async()=>{
   assert.match(login.headers.get('set-cookie'),/SameSite=Strict/);
   const c=login.headers.get('set-cookie').split(';')[0];
   assert.equal((await call('/api/state','GET',null,{cookie:c})).status,200);
-  // 跨站请求由浏览器 SameSite=Strict 拦截凭据，服务端不再重复校验 Origin（冗余防御已删）。
-  assert.equal((await call('/api/logout','POST',{}, {cookie:c,origin:'https://evil.test'})).status,200);
+  // CSRF 防线之一：写操作必须 JSON Content-Type，415 缺失即防线被删。
+  const noJson = new Request('https://local.test/api/logout',{method:'POST',headers:{cookie:c,'content-type':'text/plain'},body:'x'});
+  assert.equal((await worker.fetch(noJson,p.env)).status,415);
+  // 参数 64KB 上限（D1 写放大保护）。
+  const big = (await call('/api/tasks','POST',{...task(),params:{blob:'x'.repeat(70000)}},{cookie:c}));
+  assert.equal(big.status,400);
   assert.match((await call('/api/logout','POST',{}, {cookie:c})).headers.get('set-cookie'),/Max-Age=0/);
   assert.equal((await call('/api/tasks/0','DELETE',{}, {cookie:c})).status,404);
   p.close();
