@@ -1,9 +1,11 @@
 import { run as dnshe } from './tasks/dnshe.js';
+import { run as agentrouter } from './tasks/agentrouter.js';
 import { runtime, notify } from './runtime.js';
 import { now, nextRun, offset } from './schedule.js';
 
 export const BUILTINS = {
   'dnshe-renew': { name: 'DNSHE 域名续期', params: ['api_key','api_secret'], run: dnshe },
+  'agentrouter-login': { name: 'AgentRouter 每日登录', params: ['accounts'], run: agentrouter },
 };
 export class Engine {
   constructor(store, env, { builtins = BUILTINS, fetcher = fetch } = {}) {

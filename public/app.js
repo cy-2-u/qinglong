@@ -86,7 +86,7 @@ function editor(task) {
   let draft = { ...t.params };
   const keyOf = () => locked ? t.script_key : form.elements.script_key.value;
   function params() {
-    $('#params').innerHTML = state.builtins.find(b=>b.key===keyOf()).params.map(name=>`<label class="field">${esc(name)}${name==='cookie'?`<textarea name="p_cookie" placeholder="多账号每行一个">${esc(draft[name]||'')}</textarea>`:`<input name="p_${name}" type="password" autocomplete="off" value="${esc(draft[name]||'')}">`}</label>`).join('');
+    $('#params').innerHTML = state.builtins.find(b=>b.key===keyOf()).params.map(name=>`<label class="field">${esc(name)}${name==='cookie'||name==='accounts'?`<textarea name="p_${name}" placeholder="多账号每行一个">${esc(draft[name]||'')}</textarea>`:`<input name="p_${name}" type="password" autocomplete="off" value="${esc(draft[name]||'')}">`}</label>`).join('');
   }
   function schedule() {
     const unit = form.elements.interval_unit.value;

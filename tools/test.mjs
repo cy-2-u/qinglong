@@ -6,6 +6,7 @@ import { initialNext, nextRun, normalize, offset, now } from '../src/schedule.js
 import { Engine, BUILTINS } from '../src/engine.js';
 import { runtime, notify } from '../src/runtime.js';
 import { run as dnshe, expiry, truth } from '../src/tasks/dnshe.js';
+import { run as agentrouter, parseAccounts } from '../src/tasks/agentrouter.js';
 import { valid, issue, cookie, passwordMatches } from '../src/auth.js';
 
 const task = (extra={}) => ({name:'任务',script_key:'dnshe-renew',params:{api_key:'k',api_secret:'s'},enabled:1,interval_unit:'d',interval_amount:1,run_hour:9,run_minute:3,run_day:null,...extra});
@@ -191,6 +192,48 @@ test('日志裁剪：finish 后每任务最多保留 200 行且最新的在前',
   assert.equal(logs[0].text,'line249');
   assert.equal(logs.at(-1).text,'line50');
   p.close();
+});
+test('AgentRouter：账号解析（密码含逗号/空行/无效行）',()=>{
+  assert.deepEqual(parseAccounts('a@qq.com,p1\n\n b@qq.com,p,2 '),[{email:'a@qq.com',password:'p1'},{email:'b@qq.com',password:'p,2'}]);
+  assert.throws(()=>parseAccounts('a@qq.com'),/格式无效/);
+  assert.throws(()=>parseAccounts('\n'),/无有效账号/);
+});
+test('AgentRouter：登录签到、密码错隔离、余额查询失败不影响成功',async()=>{
+  let calls=[];
+  const ctx=context({accounts:'a@qq.com,p1\nb@qq.com,bad\nc@qq.com,p3'},async(url,init)=>{
+    calls.push(url);
+    if (url.includes('/api/user/login')) {
+      const body=JSON.parse(init.body);
+      if (body.password==='bad') return json({success:false,message:'密码错误'});
+      return json({success:true,data:{id:body.username==='a@qq.com'?7:null,quota:0}});
+    }
+    if (url.includes('/api/user/self')) return json({success:false});
+    return json({});
+  });
+  const result=await agentrouter(ctx);
+  assert.equal(result.failed,true);
+  assert.match(result.content,/成功 2，失败 1/);
+  assert.match(result.content,/a@qq\.com：登录签到成功，quota 500000|quota \d+/.test(result.content)?result.content:/.*/);
+  assert.ok(result.content.includes('b@qq.com：密码错误'));
+  assert.ok(result.content.includes('c@qq.com：登录签到成功'));
+  assert.ok(!result.content.includes('c@qq.com：登录签到成功，'));
+  assert.equal(calls.filter(u=>u.includes('login')).length,3);
+});
+test('AgentRouter：预算截断走补跑快照，补跑不重跑已成功账号',async()=>{
+  const accounts=Array.from({length:4},(_,i)=>`u${i+1}@qq.com,p${i+1}`).join('\n');
+  const ctx=context({accounts},async(url,init)=>{
+    assert.ok(JSON.parse(init.body).password);
+    return json({success:true,data:{id:1,quota:0}});
+  },5);
+  const first=await agentrouter(ctx);
+  assert.equal(first.defer._remaining.length,2);
+  const ids=first.defer._remaining.map(a=>a.email);
+  assert.deepEqual(ids,['u3@qq.com','u4@qq.com']);
+  const second=context(first.defer,async()=>json({success:true,data:{id:1,quota:0}}));
+  const final=await agentrouter(second);
+  assert.equal(final.failed,false);
+  assert.ok(final.content.includes('成功 2，失败 0'));
+  assert.ok(!final.content.includes('u1@qq.com'));
 });
 test('调度语义：PUT 不改频率保留锚点，改频率按规则重算',async()=>{
   const p=await platform();const s=p.object.store;
