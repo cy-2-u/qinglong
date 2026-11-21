@@ -7,7 +7,7 @@ const worker=(await import('../src/index.js')).default;
 // 本地演练只返回假接口，永不发送真实签到、续期或通知。
 globalThis.fetch=async(url,init)=>{
   const u=new URL(url);
-  if (u.pathname==='/api/user/login') return Response.json({success:true,data:{id:1,quota:500000}});
+  if (u.pathname==='/api/user/login') return new Response(JSON.stringify({success:true,data:{id:1,quota:500000}}),{status:200,headers:{'content-type':'application/json','set-cookie':'session=mock; Path=/'}});
   if (u.pathname==='/api/user/self') return Response.json({success:true,data:{id:1,quota:500000}});
   const body=u.searchParams.get('action')==='list'?{subdomains:[],pagination:{total:0,has_more:false}}:{code:0,success:true};
   return Response.json(body);

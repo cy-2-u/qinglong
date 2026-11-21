@@ -193,8 +193,9 @@ test('日志裁剪：finish 后每任务最多保留 200 行且最新的在前',
   assert.equal(logs.at(-1).text,'line50');
   p.close();
 });
-test('AgentRouter：账号解析（密码含逗号/空行/无效行）',()=>{
+test('AgentRouter：账号解析（密码含逗号/空行/CRLF/无效行）',()=>{
   assert.deepEqual(parseAccounts('a@qq.com,p1\n\n b@qq.com,p,2 '),[{email:'a@qq.com',password:'p1'},{email:'b@qq.com',password:'p,2'}]);
+  assert.deepEqual(parseAccounts('a@qq.com,p1\r\nb@qq.com,p2\r\n'),[{email:'a@qq.com',password:'p1'},{email:'b@qq.com',password:'p2'}]);
   assert.throws(()=>parseAccounts('a@qq.com'),/格式无效/);
   assert.throws(()=>parseAccounts('\n'),/无有效账号/);
 });
@@ -246,6 +247,10 @@ test('AgentRouter：预算截断走补跑快照，补跑不重跑已成功账号
   assert.equal(final.failed,false);
   assert.ok(final.content.includes('成功 2，失败 0'));
   assert.ok(!final.content.includes('u1@qq.com'));
+});
+test('AgentRouter：全账号超预算时防循环抛错而非空 defer',async()=>{
+  const ctx=context({accounts:'a@qq.com,p1\nb@qq.com,p2'},async()=>json({success:true,data:{id:1,quota:0}}),1);
+  await assert.rejects(()=>agentrouter(ctx),/未处理任何账号/);
 });
 test('调度语义：PUT 不改频率保留锚点，改频率按规则重算',async()=>{
   const p=await platform();const s=p.object.store;
