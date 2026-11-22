@@ -1,4 +1,4 @@
-export class BudgetError extends Error {}
+class BudgetError extends Error {}
 export function runtime({ fetcher = fetch, clock = Date.now, budget = 40, duration = 240000 } = {}) {
   const controller = new AbortController();
   const deadline = clock() + duration;
