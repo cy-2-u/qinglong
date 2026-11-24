@@ -51,12 +51,26 @@ function frequency(t) {
   const clock = `${String(t.run_hour ?? 9).padStart(2,'0')}:${String(t.run_minute ?? 0).padStart(2,'0')}`;
   return `${t.interval_unit === 'd' ? (n===1 ? '每天' : `每 ${n} 天`) : `${n===1 ? '每月' : `每 ${n} 月`} ${t.run_day} 日`} ${clock}`;
 }
+// 相对时间：把秒级时间点渲染成"明天 09:00 / 12-01 09:00"，2 天内用相对表述。
+function relative(seconds) {
+  if (!seconds) return '从未';
+  const t = new Date((seconds + (state?.timezone ?? 8) * 3600) * 1000);
+  const clock = `${String(t.getUTCHours()).padStart(2,'0')}:${String(t.getUTCMinutes()).padStart(2,'0')}`;
+  const today = new Date(Date.now() + (state?.timezone ?? 8) * 3600 * 1000);
+  today.setUTCHours(0,0,0,0);
+  const day = Math.round((Date.UTC(t.getUTCFullYear(),t.getUTCMonth(),t.getUTCDate()) - today.getTime()) / 86400000);
+  if (day === 0) return `今天 ${clock}`;
+  if (day === 1) return `明天 ${clock}`;
+  if (day === 2) return `后天 ${clock}`;
+  if (day === -1) return `昨天 ${clock}`;
+  return `${String(t.getUTCMonth()+1).padStart(2,'0')}-${String(t.getUTCDate()).padStart(2,'0')} ${clock}`;
+}
 function render() {
   $('#nav').hidden = false;
   main.innerHTML = `<div class="toolbar"><button class="primary" data-action="new">＋ 新建任务</button><span class="muted">${state.tasks.length} 个任务 · UTC${state.timezone>=0?'+':''}${state.timezone}</span></div><div class="list">${state.tasks.map(t => {
     const status = t.pending_at ? (t.last_status === 'running' ? 'running' : 'queued') : t.last_status;
     const label = { never:'待运行',ok:'',failed:'失败',running:'运行中',queued:t.pending_kind==='defer'?'等待补跑':'已排队' }[status] || '';
-    return `<article class="task ${t.enabled?'':'off'}" data-id="${t.id}"><div class="info"><h2>${esc(t.name)}</h2><div class="meta"><span>${esc(frequency(t))}</span><span>上次 ${fmt(t.last_run_at)}</span><span>下次 ${t.enabled?fmt(t.next_run_at):'已停用'}</span></div></div><div class="side"><span class="status ${status}">${label}</span><input type="checkbox" data-action="toggle" aria-label="启用 ${esc(t.name)}" ${t.enabled?'checked':''}><div class="actions">${['run','logs','edit','del'].map(key=>`<button data-action="${key}" aria-label="${{run:'立即运行',logs:'运行日志',edit:'编辑任务',del:'删除任务'}[key]} ${esc(t.name)}" ${key==='run'&&(!t.enabled||t.pending_at)?'disabled':''}>${icon(key)}</button>`).join('')}</div></div></article>`;
+    return `<article class="task ${t.enabled?'':'off'}" data-id="${t.id}"><div class="info"><h2>${esc(t.name)}</h2><div class="meta"><span>${esc(frequency(t))}</span><span>上次 ${relative(t.last_run_at)}</span><span>下次 ${t.enabled?relative(t.next_run_at):'已停用'}</span></div></div><div class="side"><span class="status ${status}">${label}</span><input type="checkbox" data-action="toggle" aria-label="启用 ${esc(t.name)}" ${t.enabled?'checked':''}><div class="actions">${['run','logs','edit','del'].map(key=>`<button data-action="${key}" aria-label="${{run:'立即运行',logs:'运行日志',edit:'编辑任务',del:'删除任务'}[key]} ${esc(t.name)}" ${key==='run'&&(!t.enabled||t.pending_at)?'disabled':''}>${icon(key)}</button>`).join('')}</div></div></article>`;
   }).join('') || '<p class="muted">还没有任务</p>'}</div>`;
 }
 async function refresh() {
