@@ -3,6 +3,7 @@ const main = $('#main'), sheet = $('#sheet');
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 let state, timer, generation = 0, refreshing, editing, toastTimer;
 const paths = { run:'M9 5l11 7-11 7z', logs:'M5 3h10l4 4v14H5z M9 11h6 M9 15h6', edit:'M4 16L16 4l4 4L8 20H4z', del:'M4 7h16 M9 7V4h6v3 M6 7l1 14h10l1-14' };
+const labels = { api_key:'API Key', api_secret:'API Secret', accounts:'账号列表' };
 const icon = key => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[key]}"></path></svg>`;
 
 // 自绘浮层提示：文本取 data-tip 或 aria-label，置于元素上方，贴边翻转。
@@ -86,7 +87,7 @@ function editor(task) {
   let draft = { ...t.params };
   const keyOf = () => locked ? t.script_key : form.elements.script_key.value;
   function params() {
-    $('#params').innerHTML = state.builtins.find(b=>b.key===keyOf()).params.map(name=>`<label class="field">${esc(name)}${name==='cookie'||name==='accounts'?`<textarea name="p_${name}" placeholder="每行一个：邮箱,密码">${esc(draft[name]||'')}</textarea>`:`<input name="p_${name}" type="password" autocomplete="off" value="${esc(draft[name]||'')}">`}</label>`).join('');
+    $('#params').innerHTML = state.builtins.find(b=>b.key===keyOf()).params.map(name=>`<label class="field">${esc(labels[name]||name)}${name==='cookie'||name==='accounts'?`<textarea name="p_${name}" placeholder="每行一个：邮箱,密码">${esc(draft[name]||'')}</textarea>`:`<input name="p_${name}" type="password" autocomplete="off" value="${esc(draft[name]||'')}">`}</label>`).join('');
   }
   function schedule() {
     const unit = form.elements.interval_unit.value;
