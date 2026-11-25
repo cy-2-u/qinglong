@@ -211,6 +211,21 @@ test('AgentRouter：200 空对象/缺 success 标志判假成功（O4）',async(
     assert.match(result.content,/响应格式异常|未确认成功/);
   }
 });
+test('AgentRouter：HTTP 4xx/5xx 携带 success:true 也判失败（O5 实施回退回归钉）',async()=>{
+  for (const status of [400,500]) {
+    const ctx=context({accounts:'a@qq.com,p1'},async()=>json({success:true},status));
+    const result=await agentrouter(ctx);
+    assert.equal(result.failed,true);
+    assert.match(result.content,new RegExp(`HTTP ${status}|未确认成功`));
+  }
+});
+test('AgentRouter：success 非布尔真值（1/\'true\'/null）拒绝，固定只收布尔 true',async()=>{
+  for (const success of [1,'true',null]) {
+    const ctx=context({accounts:'a@qq.com,p1'},async()=>json({success}));
+    const result=await agentrouter(ctx);
+    assert.equal(result.failed,true);
+  }
+});
 test('AgentRouter：登录签到、密码错隔离、镜像头与 session 传递',async()=>{
   let calls=[];
   const ctx=context({accounts:'a@qq.com,p1\nb@qq.com,bad\nc@qq.com,p3'},async(url,init)=>{

@@ -47,7 +47,7 @@ export async function run(ctx) {
       let data;
       try { data = JSON.parse(text); } catch { throw new Error(`HTTP ${response.status}：非 JSON 响应`); }
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('响应格式异常');
-      if (data.success !== true) throw new Error(data.message || `响应未确认成功（HTTP ${response.status}）`);
+      if (response.status >= 400 || data.success !== true) throw new Error(data.message || `响应未确认成功（HTTP ${response.status}）`);
       // 站点签到即每日登录；登录成功后凭 session cookie + New-Api-User 头查余额供对账。
       const jar = response.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');
       let extra = '';
