@@ -203,6 +203,14 @@ test('AgentRouter：账号解析（密码含逗号/空行/CRLF/无效行）',()=
   assert.throws(()=>parseAccounts('a@qq.com'),/格式无效/);
   assert.throws(()=>parseAccounts('\n'),/无有效账号/);
 });
+test('AgentRouter：200 空对象/缺 success 标志判假成功（O4）',async()=>{
+  for (const body of [{}, {data:{id:1}}]) {
+    const ctx=context({accounts:'a@qq.com,p1'},async()=>json(body));
+    const result=await agentrouter(ctx);
+    assert.equal(result.failed,true);
+    assert.match(result.content,/响应格式异常|未确认成功/);
+  }
+});
 test('AgentRouter：登录签到、密码错隔离、镜像头与 session 传递',async()=>{
   let calls=[];
   const ctx=context({accounts:'a@qq.com,p1\nb@qq.com,bad\nc@qq.com,p3'},async(url,init)=>{
